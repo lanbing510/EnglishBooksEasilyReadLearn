@@ -24,6 +24,8 @@ def generate_word_frequence(filename):
     strstream=""
     for line in file.xreadlines():
         strstream+=line
+    strstream=re.sub(r"\xef\xac\x81","fi",strstream) # fi 
+    strstream=re.sub(r"\xef\xac\x82","fl",strstream) # fl
     strstream=re.sub(r"(-\n|\:)","",strstream)
     strstream=re.sub(r"(\n{1,}|,|\.|\(|\)|\[|\]|\{|\}|\')"," ",strstream)
     word_list=re.findall(r"[A-Za-z]{2,}",strstream)    
@@ -91,7 +93,6 @@ def generate_word_table(word_frequence,sheet_title):
 if __name__=="__main__":
     if len(sys.argv)<2:
         print u"Usage: EasilyReadLearn.py {Your PDF File} [Start Page Number-Stop Page Number]"
-        print u"{}内是必填项, []内是选填项"
         exit()
     file_prefix=sys.argv[1].split("\\")[-1][:-4]
     if len(file_prefix)>31:
