@@ -91,6 +91,7 @@ def generate_word_table(word_frequence,sheet_title):
 if __name__=="__main__":
     if len(sys.argv)<2:
         print u"Usage: EasilyReadLearn.py {Your PDF File} [Start Page Number-Stop Page Number]"
+        print u"{}内是必填项, []内是选填项"
         exit()
     file_prefix=sys.argv[1].split("\\")[-1][:-4]
     if len(file_prefix)>31:

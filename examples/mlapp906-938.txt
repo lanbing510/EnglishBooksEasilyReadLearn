@@ -1,0 +1,4786 @@
+25 Clustering
+
+25.1
+
+Introduction
+
+Clustering is the process of grouping similar objects together. There are two kinds of inputs we
+might use. In similarity-based clustering, the input to the algorithm is an N×N dissimilarity
+matrix or distance matrix D.
+In feature-based clustering, the input to the algorithm is an
+N × D feature matrix or design matrix X. Similarity-based clustering has the advantage that it
+allows for easy inclusion of domain-speciﬁc similarity or kernel functions (Section 14.2). Feature-
+based clustering has the advantage that it is applicable to “raw”, potentially noisy data. We will
+see examples of both below.
+
+In addition to the two types of input, there are two possible types of output: ﬂat cluster-
+ing, also called partitional clustering, where we partition the objects into disjoint sets; and
+hierarchical clustering, where we create a nested tree of partitions. We will discuss both of
+these below. Not surprisingly, ﬂat clusterings are usually faster to create (O(N D) for ﬂat vs
+O(N 2 log N ) for hierarchical), but hierarchical clusterings are often more useful. Furthermore,
+most hierarchical clustering algorithms are deterministic and do not require the speciﬁcation of
+K, the number of clusters, whereas most ﬂat clustering algorithms are sensitive to the initial
+conditions and require some model selection method for K. (We will discuss how to choose K
+in more detail below.)
+
+The ﬁnal distinction we will make in this chapter is whether the method is based on a
+probabilistic model or not. One might wonder why we even bother discussing non-probabilistic
+methods for clustering. The reason is two-fold: ﬁrst, they are widely used, so readers should
+know about them; second, they often contain good ideas, which can be used to speed up
+inference in a probabilistic models.
+
+25.1.1 Measuring (dis)similarity
+
+A dissimilarity matrix D is a matrix where di,i = 0 and di,j ≥ 0 is a measure of “distance”
+between objects i and j. Subjectively judged dissimilarities are seldom distances in the strict
+sense, since the triangle inequality, di,j ≤ di,k + dj,k, often does not hold. Some algorithms
+require D to be a true distance matrix, but many do not. If we have a similarity matrix S, we
+can convert it to a dissimilarity matrix by applying any monotonically decreasing function, e.g.,
+D = max(S) − S.
+
+The most common way to deﬁne dissimilarity between objects is in terms of the dissimilarity
+
+876
+
+Chapter 25. Clustering
+
+of their attributes:
+
+D(cid:4)
+
+Δ(xi, xi(cid:2) ) =
+
+Δj(xij, xi(cid:2)j)
+
+j=1
+
+Some common attribute dissimilarity functions are as follows:
+
+• Squared (Euclidean) distance:
+
+Δj(xij, xi(cid:2)j) = (xij − xi(cid:2)j)2
+
+(25.1)
+
+(25.2)
+
+Of course, this only makes sense if attribute j is real-valued.
+
+• Squared distance strongly emphasizes large differences (because differences are squared). A
+
+more robust alternative is to use an (cid:2)1 distance:
+
+Δj(xij, xi(cid:2)j) = |xij − xi(cid:2)j|
+
+(25.3)
+
+This is also called city block distance, since,
+in 2D, the distance can be computed by
+counting how many rows and columns we have to move horizontally and vertically to get
+from xi to xi(cid:2).
+
+(cid:7)
+
+•
+
+If xi is a vector (e.g., a time-series of real-valued data), it is common to use the correlation
+j xijxi(cid:2)j,
+coefficient (see Section 2.5.1).
+j(xij − xi(cid:2)j)2 = 2(1 − corr [xi, xi(cid:2) ]). So clustering based on correlation
+and hence
+(similarity) is equivalent to clustering based on squared distance (dissimilarity).
+
+If the data is standardized, then corr [xi, xi(cid:2) ] =
+
+• For ordinal variables, such as {low, medium, high}, it is standard to encode the values as
+real-valued numbers, say 1/3, 2/3, 3/3 if there are 3 possible values. One can then apply
+any dissimilarity function for quantitative variables, such as squared distance.
+
+• For categorical variables, such as {red, green, blue}, we usually assign a distance of 1 if the
+features are different, and a distance of 0 otherwise. Summing up over all the categorical
+features gives
+
+(cid:7)
+
+D(cid:4)
+
+Δ(xi, xi) =
+
+I(xij (cid:8)= xi(cid:2)j)
+
+(25.4)
+
+j=1
+
+This is called the hamming distance.
+
+25.1.2
+
+Evaluating the output of clustering methods *
+
+The validation of clustering structures is the most difficult and frustrating part of cluster
+analysis. Without a strong effort in this direction, cluster analysis will remain a black art
+accessible only to those true believers who have experience and great courage. — Jain
+and Dubes (Jain and Dubes 1988)
+
+25.1.
+
+Introduction
+
+877
+
+(cid:36)(cid:3)(cid:36)(cid:3)(cid:36)(cid:3)
+(cid:36)(cid:3)(cid:36)(cid:3)(cid:37)
+
+(cid:36)(cid:3)(cid:37)(cid:3)(cid:37)
+(cid:37)(cid:3)(cid:37)(cid:3)(cid:38)
+
+(cid:36)(cid:3)(cid:36)(cid:3)
+(cid:38)(cid:3)(cid:38)(cid:3)(cid:38)
+
+Figure 25.1 Three clusters with labeled objects inside. Based on Figure 16.4 of (Manning et al. 2008).
+
+Clustering is an unupervised learning technique, so it is hard to evaluate the quality of the output
+of any given method.
+If we use probabilistic models, we can always evaluate the likelihood of
+a test set, but this has two drawbacks: ﬁrst, it does not directly assess any clustering that is
+discovered by the model; and second, it does not apply to non-probabilistic methods. So now
+we discuss some performance measures not based on likelihood.
+
+Intuitively, the goal of clustering is to assign points that are similar to the same cluster,
+and to ensure that points that are dissimilar are in different clusters. There are several ways
+of measuring these quantities e.g., see (Jain and Dubes 1988; Kaufman and Rousseeuw 1990).
+However, these internal criteria may be of limited use. An alternative is to rely on some external
+form of data with which to validate the method. For example, suppose we have labels for each
+object, as in Figure 25.1. (Equivalently, we can have a reference clustering; given a clustering, we
+can induce a set of labels and vice versa.) Then we can compare the clustering with the labels
+using various metrics which we describe below. We will use some of these metrics later, when
+we compare clustering methods.
+
+(cid:7)C
+
+25.1.2.1
+
+Purity
+
+(cid:4)
+
+i
+
+Let Nij be the number of objects in cluster i that belong to class j, and let Ni =
+j=1 Nij be
+the total number of objects in cluster i. Deﬁne pij = Nij/Ni; this is the empirical distribution
+over class labels for cluster i. We deﬁne the purity of a cluster as pi (cid:2) maxj pij, and the
+overall purity of a clustering as
+
+purity (cid:2)
+
+Ni
+N
+
+pi
+
+(25.5)
+
+For example, in Figure 25.1, we have that the purity is
+
++
+
+=
+
+5
+6
+
++
+
+6
+17
+
+4
+6
+
+5
+17
+
+3
+5
+
+5 + 4 + 3
+
+6
+17
+The purity ranges between 0 (bad) and 1 (good). However, we can trivially achieve a purity of
+1 by putting each object into its own cluster, so this measure does not penalize for the number
+of clusters.
+
+= 0.71
+
+(25.6)
+
+17
+
+25.1.2.2
+
+Rand index
+Let U = {u1, . . . , uR} and V = {v1, . . . , VC} be two different partitions of the N data points,
+i.e., two different (ﬂat) clusterings. For example, U might be the estimated clustering and V
+is reference clustering derived from the class labels. Now deﬁne a 2 × 2 contingency table,
+
+878
+
+Chapter 25. Clustering
+
+containing the following numbers: T P is the number of pairs that are in the same cluster in
+both U and V (true positives); T N is the number of pairs that are in the different clusters in
+both U and V (true negatives); F N is the number of pairs that are in the different clusters in
+U but the same cluster in V (false negatives); and F P is the number of pairs that are in the
+same cluster in U but different clusters in V (false positives). A common summary statistic is
+the Rand index:
+
+R (cid:2)
+
+T P + T N
+
+T P + F P + F N + T N
+
+(25.7)
+This can be interpreted as the fraction of clustering decisions that are correct. Clearly 0 ≤ R ≤
+1.
+
+For example, consider Figure 25.1, The three clusters contain 6, 6 and 5 points, so the number
+
+of “positives” (i.e., pairs of objects put in the same cluster, regardless of label) is
+
+T P + F P =
+
++
+
++
+
+= 40
+
+(cid:8)
+
+(cid:9)
+
+(cid:8)
+
+(cid:9)
+
+(cid:8)
+
+(cid:9)
+
+6
+2
+
+(cid:8)
+
+(cid:9)
+
+5
+2
+
+6
+2
+
+(cid:8)
+
+(cid:9)
+
+3
+2
+
+5
+2
+
+(cid:8)
+
+(cid:9)
+
+2
+2
+
+(cid:8)
+
+(cid:9)
+
+5
+2
+
+Of these, the number of true positives is given by
+
+(25.8)
+
+(25.9)
+
+(cid:9)
+
+2
+2
+
+T P =
+
++
+
++
+
++
+
+= 20
+
+(cid:8)
+
+(cid:9)
+
+(cid:8)
+
+3
+2
+
+where the last two terms come from cluster 3: there are
+pairs
+labeled A. So F P = 40 − 20 = 20. Similarly, one can show F N = 24 and T N = 72. So the
+Rand index is (20 + 72)/(20 + 20 + 24 + 72) = 0.68.
+
+pairs labeled C and
+
+One can deﬁne an adjusted Rand index (Hubert and Arabie 1985) as follows:
+
+The Rand index only achieves its lower bound of 0 if T P = T N = 0, which is a rare event.
+AR (cid:2) index − expected index
+max index − expected index
+
+(25.10)
+
+Here the model of randomness is based on using the generalized hyper-geometric distribution,
+i.e., the two partitions are picked at random subject to having the original number of classes
+and objects in each, and then the expected value of T P + T N is computed. This model can
+be used to compute the statistical signiﬁcance of the Rand index.
+
+The Rand index weights false positives and false negatives equally. Various other summary
+statistics for binary decision problems, such as the F-score (Section 5.7.2.2), can also be used.
+One can compute their frequentist sampling distribution, and hence their statistical signiﬁcance,
+using methods such as bootstrap.
+
+25.1.2.3 Mutual information
+
+Another way to measure cluster quality is to compute the mutual information between U and
+V (Vaithyanathan and Dom 1999). To do this, let pU V (i, j) =
+be the probability that
+a randomly chosen object belongs to cluster ui in U and vj in V . Also, let pU (i) = |ui|/N
+be the be the probability that a randomly chosen object belongs to cluster ui in U ; deﬁne
+
+|ui∩vj|
+
+N
+
+25.2. Dirichlet process mixture models
+
+879
+
+pV (j) = |vj|/N similarly. Then we have
+
+R(cid:4)
+
+C(cid:4)
+
+pU V (i, j)
+pU (i)pV (j)
+
+i=1
+
+j=1
+
+I(U, V ) =
+
+pU V (i, j) log
+
+(25.11)
+This lies between 0 and min{H (U ) , H (V )}. Unfortunately, the maximum value can be
+achieved by using lots of small clusters, which have low entropy. To compensate for this,
+we can use the normalized mutual information,
+
+N M I(U, V ) (cid:2)
+
+I(U, V )
+
+(H (U ) +H (V ))/2
+
+(25.12)
+
+This lies between 0 and 1. A version of this that is adjusted for chance (under a particular
+random data model) is described in (Vinh et al. 2009). Another variant, called variation of
+information, is described in (Meila 2005).
+
+25.2 Dirichlet process mixture models
+
+The simplest approach to (ﬂat) clustering is to use a ﬁnite mixture model, as we discussed in
+Section 11.2.3. This is sometimes called model-based clustering, since we deﬁne a probabilistic
+model of the data, and optimize a well-deﬁned objective (the likelihood or posterior), as opposed
+to just using some heuristic algorithm.
+
+The principle problem with ﬁnite mixture models is how to choose the number of components
+K. We discussed several techniques in Section 11.5. However, in many cases, there is no well-
+deﬁned number of clusters. Even in the simple 2d height-weight data (Figure 1.8), it is not clear
+if the “correct” value of K should be 2, 3, or 4. It would be much better if we did not have to
+choose K at all.
+
+In this section, we discuss inﬁnite mixture models, in which we do not impose any a priori
+bound on K. To do this, we will use a non-parametric prior based on the Dirichlet process
+(DP). This allows the number of clusters to grow as the amount of data increases.
+It will also
+prove useful later when we discuss hiearchical clustering.
+
+The topic of non-parametric Bayes is currently very active, and we do not have space to
+go into details (see (Hjort et al. 2010) for a recent book on the topic).
+Instead we just give a
+brief review of the DP and its application to mixture modeling, based on the presentation in
+(Sudderth 2006, sec 2.2).
+
+25.2.1
+
+From ﬁnite to inﬁnite mixture models
+
+Consider a ﬁnite mixture model, as shown in Figure 25.2(a). The usual representation is as
+follows:
+
+p(xi|zi = k, θ) =p( xi|θk)
+
+p(zi = k|π) =π k
+
+p(π|α) = Dir(π|(α/K)1K)
+
+(25.13)
+(25.14)
+(25.15)
+The form of p(θk|λ) is chosen to be conjugate to p(xi|θk). We can write p(xi|θk) as xi ∼
+F (θzi ), where F is the observation distribution. Similarly, we can write θk ∼ H(λ), where H
+is the prior.
+
+880
+
+Chapter 25. Clustering
+
+(a)
+
+(b)
+
+Figure 25.2 Two different representations of a ﬁnite mixture model. Left:
+traditional representation.
+Right: representation where parameters are samples from G, a discrete measure. The picture on the right
+illustrates the case where K = 4, and we sample 4 Gaussian means θk from a Gaussian prior H(.|λ). The
+height of the spikes reﬂects the mixing weights πk. This weighted sum of delta functions is G. We then
+generate two parameters, θ1 and θ2, from G, one per data point. Finally, we generate two data points,
+x1 and x2, from N (θ1, σ2) and N (θ2, σ2).
+Source: Figure 2.9 of (Sudderth 2006) . Used with kind
+permission of Erik Sudderth.
+
+An equivalent representation for this model
+
+is the
+parameter used to generate observation xi; these parameters are sampled from distribution G,
+which has the form
+
+is shown in Figure 25.2(b). Here θi
+
+K(cid:4)
+
+k=1
+
+G(θ) =
+
+πkδθk (θ)
+(25.16)
+K 1), and θk ∼ H. Thus we see that G is a ﬁnite mixture of delta functions,
+where π ∼ Dir( α
+centered on the cluster parameters θk. The probability that θi is equal to θk is exactly πk, the
+prior probability for that cluster.
+
+If we sample from this model, we will always (with probability one) get exactly K clusters,
+with data points scattered around the cluster centers. We would like a more ﬂexible model,
+that can generate a variable number of clusters. Furthermore, the more data we generate, the
+more likely we should be to see a new cluster. The way to do this is to replace the discrete
+distribution G with a random probability measure. Below we will show that the Dirichlet
+process, denoted G ∼ DP(α, H), is one way to do this.
+
+Before we go into the details, we show some samples from this non-parametric model in
+Figure 25.3. We see that it has the desired properties of generating a variable number of clusters,
+with more clusters as the amount of data increases. The resulting samples look much more like
+real data than samples from a ﬁnite mixture model.
+
+Of course, working with an “inﬁnite” model sounds scary. Fortunately, as we show below,
+even though this model is potentially inﬁnite, we can perform inference using an amount of
+computation that is not only tractable, but is often much less than that required to ﬁt a set
+
+25.2. Dirichlet process mixture models
+
+881
+
+(a)
+
+(c)
+
+(e)
+
+(b)
+
+(d)
+
+(f)
+
+Figure 25.3 Some samples from a Dirichlet process mixture model of 2D Gaussians, with concentration
+parameter α = 1. From left to right, we show N = 50, N = 500 and N = 1000 samples. Each row is a
+different run. We also show the model parameters as ellipses, which are sampled from a vague NIW base
+distribution. Based on Figure 2.25 of (Sudderth 2006). Figure generated by dpmSampleDemo, written by
+Yee-Whye Teh.
+
+of ﬁnite mixture models for different K. The intuitive reason is that we can get evidence that
+certain values of K are appropriate (have high posterior support) long before we have been able
+to estimate the parameters, so we can focus our computational efforts on models of appropriate
+complexity. Thus going to the inﬁnite limit can sometimes be faster. This is especially true
+when we have multiple model selection problems to solve.
+
+882
+
+Chapter 25. Clustering
+
+(a)
+
+(b)
+
+(c)
+
+(a) A base measure H on a 2d space Θ.
+
+Figure 25.4
+where the shading of cell Tk is proportional to E [G(Tk)] = H(Tk).
+regions. Source: Figure 2.21 of (Sudderth 2006). Used with kind permission of Erik Sudderth.
+
+(b) One possible partition into K = 3 regions,
+(c) A reﬁned partition into K = 5
+
+25.2.2
+
+The Dirichlet process
+
+Recall from Chapter 15 that a Gaussian process is a distribution over functions of the form
+f : X → R.
+It is deﬁned implicitly by the requirement that p(f (x1), . . . , f (xN )) be jointly
+Gaussian, for any set of points xi ∈ X . The parameters of this Gaussian can be computed using
+a mean function μ() and covariance (kernel) function K(). We write f ∼ GP(μ(), K()). Fur-
+thermore, the GP is consistently deﬁned, so that p(f (x1)) can be derived from p(f (x1), f (x2)),
+etc.
+require G(θ) ≥ 0 and
+(G(T1), . . . , G(TK)) has a joint Dirichlet distribution
+
++, where we
+G(θ)dθ = 1. The DP is deﬁned implicitly by the requirement that
+
+A Dirichlet process is a distribution over probability measures G : Θ → R
+
+(cid:21)
+
+Θ
+
+Dir(αH(T1), . . . , αH(TK))
+
+(25.17)
+for any ﬁnite partition (T1, . . . , TK) of Θ. If this is the case, we write G ∼ DP(α, H), where
+α is called the concentration parameter and H is called the base measure.1
+
+An example of a DP is shown in Figure 25.4, where the base measure is a 2d Gaussian. The
+distribution over all the cells, p(G(T1), . . . , G(TK)), is Dirichlet, so the marginals in each cell
+are beta distributed:
+
+(cid:4)
+
+j(cid:5)=i
+
+Beta(αH(Ti), α
+
+H(Tj))
+
+(25.18)
+
+The DP is consistently deﬁned in the sense that if T1 and T2 form a partition of ˜T1, then
+G(T1) + G(T2) and G( ˜T1) both follow the same beta distribution.
+Recall that if π ∼ Dir(α), and z|π ∼ Cat(π), then we can integrate out π to get the
+
+predictive distribution for the Dirichlet-multinoulli model:
+
+z ∼ Cat(α1/α0, . . . , αK/α0)
+
+(25.19)
+
+1. Unlike a GP, knowing something about G(Tk) does not tell us anything about G(Tk(cid:2) ), beyond the sum-to-one
+constraint; we say that the DP is a neutral process. Other stochastic processes can be deﬁned that do not have this
+property, but they are not so computationally convenient.
+
+25.2. Dirichlet process mixture models
+
+883
+
+β1
+π
+
+1
+
+β2
+π
+
+2
+
+1−β1
+
+1−β2
+
+1−β3
+
+β4
+π
+
+4
+
+1−β4
+
+β5
+π
+
+5
+
+β3
+π
+
+3
+
+(a)
+
+α = 2
+
+α = 2
+
+0.5
+
+0.4
+
+0.3
+
+0.2
+
+0.1
+
+0
+
+0
+
+0.4
+
+0.3
+
+0.2
+
+0.1
+
+0
+
+0
+
+0.4
+
+0.3
+
+0.2
+
+0.1
+
+0
+
+0
+
+0.2
+
+0.15
+
+0.1
+
+0.05
+
+0
+
+0
+
+(b)
+
+10
+
+20
+
+30
+
+α = 5
+
+10
+
+20
+
+30
+
+10
+
+20
+
+30
+
+α = 5
+
+10
+
+20
+
+30
+
+Illustration of the stick breaking construction.
+
+Figure 25.5
+(a) We have a unit length stick, which we
+break at a random point β1; the length of the piece we keep is called π1; we then recursively break off
+pieces of the remaining stick, to generate π2, π3, . . .. Source: Figure 2.22 of (Sudderth 2006). Used with
+(b) Samples of πk from this process for α = 2 (top row) and α = 5
+kind permission of Erik Sudderth.
+(bottom row). Figure generated by stickBreakingDemo, written by Yee-Whye Teh.
+
+(cid:7)
+
+where α0 =
+given one observation is given by
+
+k αk. In other words, p(z = k|α) = αk/α0. Also, the updated posterior for π
+
+π|z ∼ Dir(α1 + I(z = 1), . . . , αK + I(z = K))
+
+(25.20)
+The DP generalizes this to arbitrary partitions. If G ∼ DP(α, H), then p(θ ∈ Ti) = H(Ti) and
+the posterior is
+p(G(T1), . . . , G(TK)|θ, α, H) = Dir(αH(T1) +I (θ ∈ T1), . . . , αH(TK) +I (θ ∈ TK))(25.21)
+This holds for any set of partitions. Hence if we observe multiple samples θi ∼ G, the new
+posterior is given by
+
+G|θ1, . . . , θN , α, H ∼ DP
+
+α + N,
+
+1
+
+α + N
+
+αH +
+
+δθi
+
+(25.22)
+
+(cid:10)
+
+(cid:10)
+
+(cid:11)(cid:11)
+
+N(cid:4)
+
+i=1
+
+Thus we see that the DP effectively deﬁnes a conjugate prior for arbitrary measurable spaces.
+The concentration parameter α is like the effective sample size of the base measure H.
+
+25.2.2.1
+
+Stick breaking construction of the DP
+
+Our discussion so far has been very abstract. We now give a constructive deﬁnition for the DP,
+known as the stick-breaking construction.
+
+k=1 be an inﬁnite sequence of mixture weights derived from the following
+
+process:
+
+Let π = {πk}∞
+k−1(cid:20)
+
+βk ∼ Beta(1, α)
+
+πk = βk
+
+(1 − βl) = βk(1 − k−1(cid:4)
+
+l=1
+
+l=1
+
+πl)
+
+(25.23)
+
+(25.24)
+
+884
+
+Chapter 25. Clustering
+
+This is often denoted by
+
+π ∼ GEM(α)
+
+(25.25)
+
+where GEM stands for Griffiths, Engen and McCloskey (this term is due to (Ewens 1990)). Some
+samples from this process are shown in Figure 25.5. One can show that this process process
+will terminate with probability 1, although the number of elements it generates increases with
+α. Furthermore, the size of the πk components decreases on average.
+
+Now deﬁne
+
+∞(cid:4)
+
+G(θ) =
+
+πkδθk (θ)
+
+(25.26)
+
+k=1
+
+where π ∼ GEM(α) and θk ∼ H. Then one can show that G ∼ DP(α, H).
+
+As a consequence of this construction, we see that samples from a DP are discrete with
+probability one. In other words, if you keep sampling it, you will get more and more repetitions
+of previously generated values. So if we sample θi ∼ G, we will see repeated values; let us
+number the unique values θ1, θ2, etc. Data sampled from θi will therefore cluster around the
+θk. This is evident in Figure 25.3, where most data comes from the Gaussians with large πk
+values, represented by ellipses with thick borders. This is our ﬁrst indication that the DP might
+be useful for clustering.
+
+25.2.2.2
+
+The Chinese restaurant process (CRP)
+
+(cid:10)
+
+(cid:10)
+
+(cid:11)
+
+(cid:11)
+
+K(cid:4)
+
+k=1
+
+K(cid:4)
+
+k=1
+
+Working with inﬁnite dimensional sticks is problematic. However, we can exploit the clustering
+property to draw samples form a GP, as we now show.
+If θi ∼ G are N observations from G ∼ DP(α, H), taking on K
+
+The key result is this:
+
+distinct values θk, then the predictive distribution of the next observation is given by
+
+p(θN +1 = θ|θ1:N , α, H) =
+
+1
+
+α + N
+
+αH(θ) +
+
+Nkδθk (θ)
+
+(25.27)
+
+where Nk is the number of previous observations equal to θk. This is called the Polya urn or
+Blackwell-MacQueen sampling scheme. This provides a constructive way to sample from a DP.
+It is much more convenient to work with discrete variables zi which specify which value of
+
+θk to use. That is, we deﬁne θi = θzi. Based on the above expression, we have
+
+p(zN +1 = z|z1:N , α) =
+
+1
+
+α + N
+
+αI(z = k∗
+
+) +
+
+NkI(z = k)
+
+(25.28)
+
+where k∗
+represents a new cluster index that has not yet been used. This is called the Chinese
+restaurant process or CRP, based on the seemingly inﬁnite supply of tables at certain Chinese
+restaurants. The analogy is as follows: The tables are like clusters, and the customers are like
+observations. When a person enters the restaurant, he may choose to join an existing table with
+probability proportional to the number of people already sitting at this table (the Nk); otherwise,
+with a probability that diminishes as more people enter the room (due to the 1/(α + N ) term),
+
+25.2. Dirichlet process mixture models
+
+885
+
+(a)
+
+(b)
+
+Figure 25.6 Two views of a DP mixture model. Left:
+π ∼ GEM(α). Right: G is drawn from a DP. Compare to Figure 25.2.
+2006). Used with kind permission of Erik Sudderth.
+
+inﬁnite number of clusters parameters, θk, and
+Source: Figure 2.24 of (Sudderth
+
+he may choose to sit at a new table k∗
+integers, which is like a distribution of customers to tables.
+
+. The result is a distribution over partitions of the
+
+The fact that currently occupied tables are more likely to get new customers is sometimes
+called the rich get richer phenomenon.
+Indeed, one can derive an expression for the distri-
+bution of cluster sizes induced by this prior process; it is basically a power law. The number
+of occupied tables K almost surely approaches α log(N ) as N → ∞, showing that the model
+complexity will indeed grow logarithmically with dataset size. More ﬂexible priors over cluster
+sizes can also be deﬁned, such as the two-parameter Pitman-Yor process.
+
+25.2.3
+
+Applying Dirichlet processes to mixture modeling
+
+The DP is not particularly useful as a model for data directly, since data vectors rarely repeat
+exactly. However,
+it is useful as a prior for the parameters of a stochastic data generating
+mechanism, such as a mixture model. To create such a model, we follow exactly the same setup
+as Section 11.2, but we deﬁne G ∼ DP(α, H). Equivalently, we can write the model as follows:
+(25.29)
+(25.30)
+(25.31)
+(25.32)
+
+π ∼ GEM(α)
+zi ∼ π
+θk ∼ H(λ)
+xi ∼ F (θzi )
+
+This is illustrated in Figure 25.6. We see that G is now a random draw of an unbounded number
+of parameters θk from the base distribution H, each with weight πk. Each data point xi is
+generated by sampling its own “private” parameter θi from G. As we get more and more data,
+it becomes increasingly likely that θi will be equal to one of the θk’s we have seen before, and
+thus xi will be generated close to an existing datapoint.
+
+886
+
+Chapter 25. Clustering
+
+25.2.4
+
+Fitting a DP mixture model
+
+The simplest way to ﬁt a DPMM is to modify the collapsed Gibbs sampler of Section 24.2.4.
+From Equation 24.23 we have
+
+p(zi = k|z−i, x, α,λ ) ∝ p(zi = k|z−i, α)p(xi|x−i, zi = k, z−i, λ)
+
+(25.33)
+
+(cid:10)
+
+1
+
+α + N − 1
+3
+
+By exchangeability, we can assume that zi is the last customer to enter the restaurant. Hence
+the ﬁrst term is given by
+
+(cid:11)
+
+p(zi|z−i, α) =
+
+αI(zi = k∗
+
+) +
+
+Nk,−iI(zi = k)
+
+(25.34)
+
+K(cid:4)
+
+k=1
+
+where K is the number of clusters used by z−i, and k∗
+this is as follows:
+
+is a new cluster. Another way to write
+
+Nk,−i
+α+N−1
+α+N−1
+
+α
+
+p(zi = k|z−i, α) =
+
+if k has been seen before
+if k is a new cluster
+
+Nk,−i+α/K
+
+(25.35)
+Interestingly, this is equivalent to Equation 24.26, which has the form p(zi = k|z−i, α) =
+α+N−1
+To compute the second term, p(xi|x−i, zi = k, z−i, λ), let us partition the data x−i into
+clusters based on z−i. Let x−i,c = {xj : zj = c, j (cid:8)= i} be the data assigned to cluster c.
+If
+zi = k, then xi is conditionally independent of all the data points except those assigned to
+cluster k. Hence we have
+
+, in theK → ∞ limit (Rasmussen 2000; Neal 2000).
+
+p(xi|x−i, z−i, zi = k, λ) =p( xi|x−i,k, λ) =
+
+where
+
+p(xi, x−i,k|λ) =
+
+(cid:12)
+
+p(xi|θk)
+
+⎡
+⎣ (cid:20)
+
+j(cid:5)=i:zj =k
+
+p(xi, x−i,k|λ)
+p(x−i,k|λ)
+⎤
+⎦ H(θk|λ)dθk
+
+p(xj|θk)
+
+(25.36)
+
+(25.37)
+
+is the marginal likelihood of all the data assigned to cluster k, including i, and p(x−i,k|λ) is an
+analogous expression excluding i. Thus we see that the term p(xi|x−i, z−i, zi = k, λ) is the
+posterior preditive distribution for cluster k evaluated at xi.
+
+, corresponding to a new cluster, we have
+
+If zi = k∗
+p(xi|x−i, z−i, zi = k∗, λ) = p(xi|λ) =
+
+(cid:12)
+
+p(xi|θ)H(θ|λ)dθ
+
+(25.38)
+
+which is just the prior predictive distribution for a new cluster evaluated at xi.
+See Algorithm 1 for the pseudocode. (This is called “Algorithm 3” in (Neal 2000).) This is very
+similar to collapsed Gibbs for ﬁnite mixtures except that we have to consider the case zi = k∗
+.
+An example of this procedure in action is shown in Figure 25.7. The sample clusterings, and
+the induced posterior over K, seems reasonable. The method tends to rapidly discover a good
+clustering. By contrast, Gibbs sampling (and EM) for a ﬁnite mixture model often gets stuck in
+
+25.3. Affinity propagation
+
+887
+
+Algorithm 25.1: Collapsed Gibbs sampler for DP mixtures
+1 for each i = 1 :N in random order do
+2
+
+Remove xi’s sufficient statistics from old cluster zi ;
+for each k = 1 :K do
+
+Compute pk(xi) = p(xi|x−i(k));
+Set Nk,−i = dim(x−i(k)) ;
+Compute p(zi = k|z−i,D) =
+
+Nk,−i
+α+N−1 ;
+
+3
+
+4
+
+5
+
+6
+
+7
+
+8
+
+9
+
+10
+
+11
+
+12
+
+Compute p∗(xi) = p(xi|λ);
+Compute p(zi = ∗|z−i,D) =
+Normalize p(zi|·);
+Sample zi ∼ p(zi|·) ;
+Add xi’s sufficient statistics to new cluster zi ;
+If any cluster is empty, remove it and decrease K;
+
+α+N−1 ;
+
+α
+
+poor local optima (not shown). This is because the DPMM is able to create extra redundant
+clusters early on, and to use them to escape local optima. Figure 25.8 shows that most of the
+time, the DPMM converges more rapidly than a ﬁnite mixture model.
+
+A variety of other ﬁtting methods have been proposed. (Daume 2007a) shows how one can use
+A star search and beam search to quickly ﬁnd an approximate MAP estimate. (Mansinghka et al.
+2007) discusses how to ﬁt a DPMM online using particle ﬁltering, which is a like a stochastic
+version of beam search. This can be more efficient than Gibbs sampling, particularly for large
+datasets. (Kurihara et al. 2006) develops a variational approximation that is even faster (see also
+(Zobay 2009)). Extensions to the case of non-conjugate priors are discussed in (Neal 2000).
+
+Another important issue is how to set the hyper-parameters. For the DP, the value of α
+does not have much impact on predictive accuracy, but it does affect the number of clusters.
+One approach is to put a Ga(a, b) prior for α, and then to from its posterior, p(α|K, N, a, b),
+using auxiliary variable methods (Escobar and West 1995). Alternatively, one can use empirical
+Bayes (McAuliffe et al. 2006). Similarly, for the base distribution, we can either sample the
+hyper-parameters λ (Rasmussen 2000) or use empirical Bayes (McAuliffe et al. 2006).
+
+25.3
+
+Affinity propagation
+Mixture models, whether ﬁnite or inﬁnite, require access to the raw N × D data matrix, and
+need to specify a generative model of the data. An alternative approach takes as input an N ×N
+similarity matrix, and then tries to identify examplars, which will act as cluster centers. The
+K-medoids or K-centers algorithm (Section 14.4.2) is one approach, but it can suffer from local
+minima. Here we describe an alternative approach called affinity propagation (Frey and Dueck
+2007) that works substantially better in practice.
+
+The idea is that each data point must choose another data point as its exemplar or centroid;
+some data points will choose themselves as centroids, and this will automatically determine the
+number of clusters. More precisely, let ci ∈ {1, . . . , N} represent the centroid for datapoint i.
+
+888
+
+4
+
+2
+
+0
+
+−2
+
+−4
+
+−6
+
+4
+
+2
+
+0
+
+−2
+
+−4
+
+−6
+
+iter# 50
+
+iter# 100
+
+Chapter 25. Clustering
+
+4
+
+2
+
+0
+
+−2
+
+−4
+
+−6
+
+−6
+
+−4
+
+−2
+
+0
+
+2
+
+4
+
+−6
+
+−4
+
+−2
+
+0
+
+2
+
+4
+
+(a)
+
+iter# 200
+
+−6
+
+−4
+
+−2
+
+0
+
+2
+
+4
+
+(c)
+
+0.7
+
+0.6
+
+0.5
+
+0.4
+
+0.3
+
+0.2
+
+0.1
+
+0
+
+(b)
+
+1
+
+2
+
+3
+
+4
+
+5
+
+6
+
+(d)
+
+Figure 25.7
+100 data points in 2d are clustered using a DP mixture ﬁt with collapsed Gibbs sampling.
+We show samples from the posterior after 50,100, 200 samples. We also show the posterior over K, based
+on 200 samples, discarding the ﬁrst 50 as burnin. Figure generated by dpmGauss2dDemo, written by Yee
+Whye Teh.
+
+The goal is to maximize the following function
+
+N(cid:4)
+
+N(cid:4)
+
+S(c) =
+
+s(i, ci) +
+
+δk(c)
+
+(25.39)
+
+i=1
+
+k=1
+
+The ﬁrst term measures the similarity of each point to its centroid. The second term is a penalty
+term that is −∞ if some data point i has chosen k as its exemplar (i.e., ci = k), but k has not
+chosen itself as an exemplar (i.e., we do not have ck = k). More formally,
+
+(cid:19) −∞ if ck (cid:8)= k but ∃i : ci = k
+
+(25.40)
+
+δk(c) =
+
+0
+
+otherwise
+
+The objective function can be represented as a factor graph. We can either use N nodes,
+
+25.3. Affinity propagation
+
+)
+θ
+ 
+,
+π
+ 
+|
+ 
+x
+(
+p
+
+ 
+
+g
+o
+
+l
+
+−350
+
+−400
+
+−450
+
+−500
+
+−550
+
+−600
+
+ 
+100
+
+ 
+
+Dirichlet Process Mixture
+Finite Mixture
+102
+
+103
+
+101
+
+Iteration
+
+(a)
+
+)
+θ
+ 
+,
+π
+ 
+|
+ 
+x
+(
+p
+
+ 
+
+g
+o
+
+l
+
+−350
+
+−400
+
+−450
+
+−500
+
+−550
+
+−600
+
+ 
+100
+
+889
+
+ 
+
+Dirichlet Process Mixture
+Finite Mixture
+102
+
+103
+
+101
+
+Iteration
+
+(b)
+
+Figure 25.8 Comparison of collapsed Gibbs samplers for a DP mixture (dark blue) and a ﬁnite mixture
+(light red) with K = 4 applied to N = 300 data points (shown in Figure 25.7). Left: logprob vs iteration
+for 20 different starting values. Right: median (thick line) and quantiles (dashed lines) over 100 different
+starting values. Source: Figure 2.27 of (Sudderth 2006). Used with kind permission of Erik Sudderth.
+
+A
+
+1
+
+2
+2
+
+3
+
+…
+
+…
+
+k
+
+N
+
+c1
+
+c2
+
+…
+
+ci
+
+c3
+
+…
+
+cN
+
+s(1, )
+
+s(2, )
+
+s(3, )
+
+s(i, )
+
+s(N, )
+
+Figure 25.9 Factor graphs for affinity propagation. Circles are variables, squares are factors. Each ci node
+has N possible states. From Figure S2 of (Frey and Dueck 2007). Used with kind permission of Brendan
+Frey.
+
+each with N possible values, as shown in Figure 25.9, or we can use N 2 binary nodes (see
+(Givoni and Frey 2009) for the details). We will assume the former representation.
+
+We can ﬁnd a strong local maximum of the objective by using max-product loopy belief
+propagation (Section 22.2). Referring to the model in Figure 25.9, each variable nodes ci sends
+a message to each factor node δk. It turns out that this vector of N numbers can be reduced
+to a scalar message, denote ri→k, known as the responsibility. This is a measure of how much
+i thinks k would make a good exemplar, compared to all the other exemplars i has looked at.
+In addition, each factor node δk sends a message to each variable node ci. Again this can be
+reduced to a scalar message, ai←k, known as the availability. This is a measure of how strongly
+k believes it should an exemplar for i, based on all the other data points k has looked at.
+
+As usual with loopy BP, the method might oscillate, and convergence is not guaranteed.
+
+890
+
+Chapter 25. Clustering
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(cid:1)(cid:1)(cid:1)
+(cid:1) (cid:1)
+
+(cid:1) (cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+(cid:1)(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1) (cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1) (cid:1)
+(cid:1)(cid:1)
+(cid:1) (cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1)(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1) (cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)(cid:1)(cid:1)
+(cid:1)(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1) (cid:1)(cid:1)
+(cid:1)
+(cid:1) (cid:1) (cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)(cid:1)
+(cid:1) (cid:1)
+(cid:1) (cid:1)
+
+(cid:1)(cid:1)(cid:1)
+
+(cid:1)
+
+
+
+
+
+
+
+
+
+
+
+
+(cid:1)
+(cid:1)(cid:1)(cid:1)
+
+(cid:1) (cid:1)(cid:1)(cid:1)
+
+(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+(cid:1)(cid:1) (cid:1)(cid:1)
+(cid:1)(cid:1)(cid:1)(cid:1)(cid:1) (cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1) (cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1) (cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)(cid:1)
+(cid:1)(cid:1) (cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+(cid:1)(cid:1)(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1) (cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+(cid:1)(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+
+(cid:1)
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1) (cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1)
+(cid:1)(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1) (cid:1)(cid:1)
+(cid:1)(cid:1)(cid:1)(cid:1)
+(cid:1)(cid:1)(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1) (cid:1)
+(cid:1)
+(cid:1)(cid:1)(cid:1)
+(cid:1)(cid:1)(cid:1)
+(cid:1)(cid:1)(cid:1)
+(cid:1)(cid:1) (cid:1)
+(cid:1)(cid:1)(cid:1)
+
+(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1)(cid:1)(cid:1)(cid:1)
+
+
+
+(cid:1)(cid:1)(cid:1)
+(cid:1) (cid:1)
+
+(cid:1)
+
+(cid:1) (cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1) (cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1) (cid:1)(cid:1)
+(cid:1)
+(cid:1)
+
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1) (cid:1)
+(cid:1)(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1)(cid:1)(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+(cid:1)(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)(cid:1)
+(cid:1)
+(cid:1) (cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1)(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)
+(cid:1)
+
+(cid:1)
+
+(cid:1) (cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1) (cid:1)
+(cid:1)
+(cid:1)(cid:1)(cid:1)
+(cid:1)(cid:1) (cid:1)
+(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1)
+(cid:1) (cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+
+(cid:1)(cid:1)
+
+(cid:1)(cid:1)(cid:1)
+(cid:1)
+
+
+
+
+
+
+(cid:1) (cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+
+(cid:1)
+
+
+
+(cid:1)(cid:1)(cid:1) (cid:1)
+
+(cid:1)
+
+(cid:1) (cid:1)(cid:1)(cid:1)
+
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1)(cid:1)(cid:1)
+(cid:1) (cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1)
+
+(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)
+(cid:1)
+
+(cid:1)
+
+(cid:1) (cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1)
+(cid:1)
+
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1) (cid:1) (cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)(cid:1)(cid:1)
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(cid:1)(cid:1)(cid:1)
+(cid:1)(cid:1) (cid:1)(cid:1)(cid:1)
+
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1)(cid:1)(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1) (cid:1)(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1) (cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1)
+(cid:1)
+(cid:1)
+(cid:1) (cid:1) (cid:1)
+(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)(cid:1)(cid:1)
+(cid:1) (cid:1)(cid:1)
+
+(cid:1)(cid:1)
+
+(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)
+(cid:1)
+
+
+
+
+
+
+
+
+
+
+
+
+(cid:1)(cid:1)
+
+(cid:1)(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1) (cid:1)(cid:1)(cid:1)(cid:1)
+
+(cid:1)(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1) (cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+(cid:1) (cid:1)
+(cid:1)
+
+(cid:1)(cid:1)
+
+(cid:1)
+(cid:1)(cid:1)
+
+(cid:1)
+(cid:1)
+
+
+
+
+(cid:1)
+
+(cid:1) (cid:1)
+
+
+
+
+
+
+
+
+
+(cid:1)(cid:1)
+
+(cid:1)(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+(cid:1)(cid:1)
+(cid:1)
+
+(cid:1)
+(cid:1)
+(cid:1)
+
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+
+(cid:1)
+
+(cid:1) (cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1) (cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+(cid:1)
+
+(cid:1)(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+(cid:1)
+
+
+
+
+(cid:1) (cid:1)
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1) (cid:1)
+
+
+
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1) (cid:1)
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1)
+
+(cid:1) (cid:1)
+
+
+
+
+
+
+
+
+
+
+
+,-,$4$+.* /
+
+$4$+.* /
+
+Figure 25.10 Example of affinity propagation. Each point is colored coded by how much it wants to be
+an exemplar (red is the most, green is the least). This can be computed by summing up all the incoming
+availability messages and the self-similarity term. The darkness of the i → k arrow reﬂects how much
+point i wants to belong to exemplar k. From Figure 1 of (Frey and Dueck 2007). Used with kind permission
+of Brendan Frey.
+
+However, by using damping, the method is very reliable in practice.
+If the graph is densely
+connected, message passing takes O(N 2) time, but with sparse similarity matrices, it only takes
+O(E) time, where E is the number of edges or non-zero entries in S.
+
+The number of clusters can be controlled by scaling the diagonal terms S(i, i), which reﬂect
+how much each data point wants to be an exemplar. Figure 25.10 gives a simple example of some
+2d data, where the negative Euclidean distance was used to measured similarity. The S(i, i)
+values were set to be the median of all the pairwise similarities. The result is 3 clusters. Many
+other results are reported in (Frey and Dueck 2007), who show that the method signiﬁcantly
+outperforms K-medoids.
+
+25.4
+
+Spectral clustering
+
+An alternative view of clustering is in terms of graph cuts. The idea is we create a weighted
+undirected graph W from the similarity matrix S, typically by using the nearest neighbors of
+each point; this ensures the graph is sparse, which speeds computation.
+If we want to ﬁnd a
+partition into K clusters, say A1, . . . , AK, one natural criterion is to minimize
+
+cut(A1, . . . , AK) (cid:2) 1
+2
+
+K(cid:4)
+
+k=1
+
+W (Ak, Ak)
+
+(25.41)
+
+25.4. Spectral clustering
+
+(cid:7)
+
+where Ak = V \ Ak is the complement of Ak, and W (A, B) (cid:2)
+i∈A,j∈B wij. For K = 2 this
+problem is easy to solve. Unfortunately the optimal solution often just partitions off a single
+data point from the rest. To ensure the sets are reasonably large, we can deﬁne the normalized
+cut to be
+
+891
+
+(25.42)
+
+K(cid:4)
+
+k=1
+
+Ncut(A1, . . . , AK) (cid:2) 1
+2
+
+(cid:7)
+
+cut(Ak, Ak)
+
+vol(Ak)
+
+(cid:7)N
+
+i∈A di, and di =
+
+where vol(A) (cid:2)
+j=1 wij is the weighted degree of node i. This splits
+the graph into K clusters such that nodes within each cluster are similar to each other, but are
+different to nodes in other clusters.
+We can formulate the Ncut problem in terms of searching for binary vectors ci ∈ {0, 1}N ,
+where cik = 1 if point i belongs to cluster k, that minimize the objective. Unfortunately this
+is NP-hard (Wagner and Wagner 1993). Affinity propagation is one way to solve the problem.
+Another is to relax the constraints that ci be binary, and allow them to be real-valued. The
+result turns into an eigenvector problem known as spectral clustering (see e.g., (Shi and Malik
+In general, the technique of performing eigenalysis of graphs is called spectral graph
+2000)).
+theory (Chung 1997).
+
+Going into the details would take us too far aﬁeld, but below we give a very brief summary,
+
+based on (von Luxburg 2007), since we will encounter some of these ideas later on.
+
+25.4.1
+
+Graph Laplacian
+Let W be a symmetric weight matrix for a graph, where wij = wji ≥ 0. Let D = diag(di) be a
+diaogonal matrix containing the weighted degree of each node. We deﬁne the graph Laplacian
+as follows:
+
+L (cid:2) D − W
+
+(25.43)
+
+This matrix has various important properties. Because each row sums to zero, we have
+(cid:4)
+that 1 is an eigenvector with eigenvalue 0. Furthermore, the matrix is symmetric and positive
+semi-deﬁnite. To see this, note that
+f T Lf = f T Df − f T Wf =
+(cid:4)
+
+(cid:4)
+(cid:4)
+
+(cid:4)
+
+fifjwij
+
+(25.44)
+
+i −
+
+dif 2
+
+i,j
+
+i
+
+⎛
+⎝(cid:4)
+
+wij(fi − fj)2
+
+(25.45)
+
+=
+
+1
+2
+
+i − 2
+
+dif 2
+
+fifjwij +
+
+djf 2
+j
+
+i
+
+i,j
+
+j
+
+⎞
+⎠ =
+
+1
+2
+
+i,j
+
+Hence f T Lf ≥ 0 for all f ∈ R
+eigenvalues, 0 ≤ λ1 ≤ λ2 ≤ . . . ≤ λN .
+
+N . Consequently we see that L has N non-negative, real-valued
+
+To get some intuition as to why L might be useful for graph-based clustering, we note the
+
+following result.
+
+Theorem 25.4.1. The set of eigenvectors of L with eigenvalue 0 is spanned by the indicator vectors
+1A1
+
+, . . . , 1AK , where Ak are the K connected components of the graph.
+
+892
+
+Chapter 25. Clustering
+
+(cid:7)
+
+Proof. Let us start with the case K = 1.
+If f is an eigenvector with eigenvalue 0, then
+ij wij(fi − fj)2. If two nodes are connected, so wij > 0, we must have that fi = fj.
+0 =
+Hence f is constant for all vertices which are connected by a path in the graph. Now suppose
+K > 1. In this case, L will be block diagonal. A similar argument to the above shows that we
+will have K indicator functions, which “select out” the connected components.
+
+This suggests the following algorithm. Compute the ﬁrst K eigenvectors uk of L. Let
+U = [u1, . . . , uK] be an N × K matrix with the eigenvectors in its columns. Let yi ∈ R
+K be
+the i’th row of U. Since these yi will be piecewise constant, we can apply K-means clustering
+to them to recover the connected components. Now assign point i to cluster k iff row i of Y
+was assigned to cluster k.
+
+In reality, we do not expect a graph derived from a real similarity matrix to have isolated
+connected components — that would be too easy. But it is reasonable to suppose the graph is
+a small “perturbation” from such an ideal. In this case, one can use results from perturbation
+theory to show that the eigenvectors of the perturbed Laplacian will be close to these ideal
+indicator functions (Ng et al. 2001).
+Note that this approach is related to kernel PCA (Section 14.4.4). In particular, KPCA uses the
+largest eigenvectors of W; these are equivalent to the smallest eigenvectors of I − W. This is
+similar to the above method, which computes the smallest eigenvectors of L = D − W. See
+In practice, spectral clustering gives much better results than
+(Bengio et al. 2004) for details.
+KPCA.
+
+25.4.2
+
+Normalized graph Laplacian
+
+In practice, it is important to normalize the graph Laplacian, to account for the fact that some
+nodes are more highly connected than others. There are two comon ways to do this. One
+method, used in e.g., (Shi and Malik 2000; Meila 2001), creates a stochastic matrix where each
+row sums to one:
+
+Lrw (cid:2) D−1L = I − D−1W
+
+(25.46)
+
+The eigenvalues and eigenvectors of L and Lrw are closely related to each other (see (von
+Luxburg 2007) for details). Furthemore, one can show that for Lrw, the eigenspace of 0 is
+again spanned by the indicator vectors 1Ak . This suggests the following algorithm: ﬁnd the
+smallest K eigenvectors of Lrw, create U, cluster the rows of U using K-means, then infer the
+partitioning of the original points (Shi and Malik 2000).
+(Note that the eigenvectors/ values of
+Lrw are equivalent to the generalized eigenvectors/ values of L, which solve Lu = λDU.)
+
+2 LD− 1
+
+(
+
+k u2
+
+2 WD− 1
+
+2
+
+2 = I − D− 1
+
+Another method, used in e.g., (Ng et al. 2001), creates a symmetric matrix
+Lsym (cid:2) D− 1
+"
+(cid:7)
+
+This time the eigenspace of 0 is spanned by D 1
+2 1Ak . This suggest the following algorithm: ﬁnd
+the smallest K eigenvectors of Lsym, create U, normalize each row to unit norm by creating
+tij = uij/
+ik), cluster the rows of T using K-means, then infer the partitioning of the
+original points (Ng et al. 2001).
+There is an interesting connection between Ncuts and random walks on a graph (Meila
+2001). First note that P = D−1W = I − Lrw is a stochastic matrix, where pij = wij/di
+
+(25.47)
+
+25.5. Hierarchical clustering
+
+893
+
+y
+
+5
+
+4
+
+3
+
+2
+
+1
+
+0
+
+−1
+
+−2
+
+−3
+
+−4
+
+−5
+−6
+
+k−means clustering
+
+2
+
+4
+
+6
+
+−4
+
+−2
+
+0
+x
+
+(a)
+
+y
+
+5
+
+4
+
+3
+
+2
+
+1
+
+0
+
+−1
+
+−2
+
+−3
+
+−4
+
+−5
+−6
+
+spectral clustering
+
+2
+
+4
+
+6
+
+−4
+
+−2
+
+0
+x
+
+(b)
+
+Figure 25.11 Clustering data consisting of 2 spirals. (a) K-means. (b) Spectral clustering. Figure generated
+by spectralClusteringDemo, written by Wei-Lwun Lu.
+
+can be interpreted as the probability of going from i to j.
+If the graph is connected and
+non-bipartite, it possesses a unique stationary distribution π = (π1, . . . , πN ), where πi =
+di/vol(V ). Furthermore, one can show that
+
+Ncut(A, A) = p(A|A) +p( A|A)
+
+(25.48)
+
+This means that we are looking for a cut such that a random walk rarely makes transitions from
+A to A or vice versa.
+
+25.4.3
+
+Example
+
+Figure 25.11 illustrates the method in action. In Figure 25.11(a), we see that K-means does a poor
+job of clustering, since it implicitly assumes each cluster corresponds to a spherical Gaussian.
+Next we try spectral clustering. We deﬁne a similarity matrix using the Gaussian kernel. We
+compute the ﬁrst two eigenvectors of the Laplacian. From this we can infer the clustering in
+Figure 25.11(b).
+
+Since the method is based on ﬁnding the smallest K eigenvectors of a sparse matrix, it takes
+O(N 3) time. However, a variety of methods can be used to scale it up for large datasets (see
+e.g., (Yan et al. 2009)).
+
+25.5 Hierarchical clustering
+
+Mixture models, whether ﬁnite or inﬁnite, produce a “ﬂat” clustering. Often we want to learn a
+hierarchical clustering, where clusters can be nested inside each other.
+
+There are two main approaches to hierarchical clustering: bottom-up or agglomerative clus-
+tering, and top-down or divisive clustering. Both methods take as input a dissimilarity matrix
+between the objects.
+In the bottom-up approach, the most similar groups are merged at each
+
+894
+
+Chapter 25. Clustering
+
+2
+
+1
+
+3
+
+5
+
+4.5
+
+4
+
+3.5
+
+3
+
+2.5
+
+2
+
+1.5
+
+1
+
+0.5
+
+0
+
+0
+
+1
+
+2
+
+3
+
+5
+
+4
+
+4
+
+(a)
+
+2.5
+
+2
+
+1.5
+
+1
+
+5
+
+6
+
+7
+
+8
+
+4
+
+5
+
+3
+
+2
+
+1
+
+(b)
+
+Figure 25.12 (a) An example of single link clustering using city block distance. Pairs (1,3) and (4,5) are
+both distance 1 apart, so get merged ﬁrst. (b) The resulting dendrogram. Based on Figure 7.5 of (Alpaydin
+2004). Figure generated by agglomDemo.
+
+Hierarchical Clustering of Profiles
+
+0
+−1
+−2
+−3
+0
+
+2
+
+0
+
+−2
+0
+
+2
+0
+−2
+−4
+0
+
+2
+1.5
+1
+0.5
+
+10
+
+20
+
+10
+
+20
+
+10
+
+20
+
+0
+
+10
+
+20
+
+0
+
+−1
+
+−2
+0
+
+2
+
+0
+
+−2
+0
+
+4
+2
+0
+−2
+0
+
+2
+
+1
+
+0
+0
+
+−0.5
+−1
+−1.5
+−2
+−2.5
+0
+
+0
+
+−2
+
+−4
+0
+
+2
+1
+0
+−1
+0
+
+0
+
+−1
+
+−2
+0
+
+10
+
+20
+
+10
+
+20
+
+10
+
+20
+
+10
+
+20
+
+(b)
+
+1
+0
+−1
+−2
+−3
+0
+
+4
+2
+0
+−2
+0
+
+2.5
+2
+1.5
+1
+0.5
+0
+
+2
+1
+0
+−1
+0
+
+10
+
+20
+
+10
+
+20
+
+10
+
+20
+
+10
+
+20
+
+10
+
+20
+
+10
+
+20
+
+10
+
+20
+
+10
+
+20
+
+(a)
+
+Figure 25.13 Hierarchical clustering applied to the yeast gene expression data. (a) The rows are permuted
+according to a hierarchical clustering scheme (average link agglomerative clustering),
+in order to bring
+similar rows close together.
+(b) 16 clusters induced by cutting the average linkage tree at a certain height.
+Figure generated by hclustYeastDemo.
+
+In the top-down approach, groups are split using various different criteria. We give the
+
+step.
+details below.
+
+Note that agglomerative and divisive clustering are both just heuristics, which do not optimize
+any well-deﬁned objective function. Thus it is hard to assess the quality of the clustering they
+produce in any formal sense. Furthermore, they will always produce a clustering of the input
+data, even if the data has no structure at all (e.g., it is random noise). Later in this section we
+will discuss a probabilistic version of hierarchical clustering that solves both these problems.
+
+25.5. Hierarchical clustering
+
+895
+
+Algorithm 25.2: Agglomerative clustering
+1 initialize clusters as singletons: for i ← 1 to n do Ci ← {i};
+2 initialize set of clusters available for merging: S ← {1, . . . , n};
+3 repeat
+4
+
+Pick 2 most similar clusters to merge: (j, k) ← arg minj,k∈S dj,k;
+Create new cluster C(cid:8) ← Cj ∪ Ck;
+Mark j and k as unavailable: S ← S \ {j, k};
+if C(cid:8) (cid:8)= {1, . . . , n} then
+foreach i ∈ S do
+
+Mark (cid:2) as available, S ← S ∪ {(cid:2)};
+
+5
+
+6
+
+7
+
+8
+
+9
+
+10
+
+Update dissimilarity matrix d(i, (cid:2));
+
+11 until no more clusters are available for merging;
+
+(a)
+
+(b)
+
+(c)
+
+Figure 25.14
+
+Illustration of (a) Single linkage. (b) Complete linkage. (c) Average linkage.
+
+25.5.1
+
+Agglomerative clustering
+
+Agglomerative clustering starts with N groups, each initially containing one object, and then at
+each step it merges the two most similar groups until there is a single group, containing all the
+data. See Algorithm 11 for the pseudocode. Since picking the two most similar clusters to merge
+takes O(N 2) time, and there are O(N ) steps in the algorithm, the total running time is O(N 3).
+However, by using a priority queue, this can be reduced to O(N 2 log N ) (see e.g., (Manning
+et al. 2008, ch. 17) for details). For large N , a common heuristic is to ﬁrst run K-means, which
+takes O(KN D) time, and then apply hierarchical clustering to the estimated cluster centers.
+
+The merging process can be represented by a binary tree, called a dendrogram, as shown
+in Figure 25.12(b). The initial groups (objects) are at the leaves (at the bottom of the ﬁgure),
+and every time two groups are merged, we join them in the tree. The height of the branches
+represents the dissimilarity between the groups that are being joined. The root of the tree (which
+is at the top) represents a group containing all the data. If we cut the tree at any given height,
+we induce a clustering of a given size. For example, if we cut the tree in Figure 25.12(b) at
+height 2, we get the clustering {{{4, 5},{1, 3}},{2}}. We discuss the issue of how to choose
+the height/ number of clusters below.
+
+A more complex example is shown in Figure 25.13(a), where we show some gene expression
+If we cut the tree in Figure 25.13(a) at a certain height, we get the 16 clusters shown in
+
+data.
+Figure 25.13(b).
+
+There are actually three variants of agglomerative clustering, depending on how we deﬁne
+the dissimilarity between groups of objects. These can give quite different results, as shown in
+
+896
+
+Chapter 25. Clustering
+
+0.3
+
+0.25
+
+0.2
+
+0.15
+
+0.1
+
+0.05
+
+2
+
+1.8
+
+1.6
+
+1.4
+
+1.2
+
+1
+
+0.8
+
+0.6
+
+0.4
+
+0.2
+
+1.8
+
+1.6
+
+1.4
+
+1.2
+
+1
+
+0.8
+
+0.6
+
+0.4
+
+0.2
+
+single link
+
+(a)
+
+complete link
+
+(b)
+
+average link
+
+(c)
+
+Figure 25.15 Hierarchical clustering of yeast gene expression data. (a) Single linkage. (b) Complete linkage.
+(c) Average linkage. Figure generated by hclustYeastDemo.
+
+25.5. Hierarchical clustering
+
+897
+
+Figure 25.15. We give the details below.
+
+25.5.1.1
+
+Single link
+
+In single link clustering, also called nearest neighbor clustering, the distance between two
+groups G and H is deﬁned as the distance between the two closest members of each group:
+
+dSL(G, H) = min
+
+i∈G,i(cid:2)∈H
+
+di,i(cid:2)
+
+See Figure 25.14(a).
+
+(25.49)
+
+The tree built using single link clustering is a minimum spanning tree of the data, which
+is a tree that connects all the objects in a way that minimizes the sum of the edge weights
+(distances). To see this, note that when we merge two clusters, we connect together the two
+closest members of the clusters; this adds an edge between the corresponding nodes, and this
+is guaranteed to be the “lightest weight” edge joining these two clusters. And once two clusters
+have been merged, they will never be considered again, so we cannot create cycles. As a
+consequence of this, we can actually implement single link clustering in O(N 2) time, whereas
+the other variants take O(N 3) time.
+
+25.5.1.2
+
+Complete link
+
+In complete link clustering, also called furthest neighbor clustering, the distance between
+two groups is deﬁned as the distance between the two most distant pairs:
+
+dCL(G, H) = max
+
+i∈G,i(cid:2)∈H
+
+di,i(cid:2)
+
+See Figure 25.14(b).
+
+(25.50)
+
+Single linkage only requires that a single pair of objects be close for the two groups to
+be considered close together, regardless of the similarity of the other members of the group.
+Thus clusters can be formed that violate the compactness property, which says that all the
+observations within a group should be similar to each other.
+In particular if we deﬁne the
+diameter of a group as the largest dissimilarity of its members, dG = maxi∈G,i(cid:2)∈G di,i(cid:2), then
+we can see that single linkage can produce clusters with large diameters. Complete linkage
+represents the opposite extreme: two groups are considered close only if all of the observations
+in their union are relatively similar. This will tend to produce clusterings with small diameter,
+i.e., compact clusters.
+
+25.5.1.3
+
+Average link
+
+In practice, the preferred method is average link clustering, which measures the average
+distance between all pairs:
+
+(cid:4)
+
+(cid:4)
+
+nGnH
+
+i∈G
+
+i(cid:2)∈H
+
+davg(G, H) =
+
+1
+
+di,i(cid:2)
+
+(25.51)
+
+where nG and nH are the number of elements in groups G and H. See Figure 25.14(c).
+
+Average link clustering represents a compromise between single and complete link clustering.
+It tends to produce relatively compact clusters that are relatively far apart. However, since it
+
+898
+
+Chapter 25. Clustering
+
+involves averaging of the di,i(cid:2)’s, any change to the measurement scale can change the result. In
+contrast, single linkage and complete linkage are invariant to monotonic transformations of di,i(cid:2),
+since they leave the relative ordering the same.
+
+25.5.2
+
+Divisive clustering
+
+Divisive clustering starts with all the data in a single cluster, and then recursively divides each
+cluster into two daughter clusters, in a top-down fashion. Since there are 2N−1 − 1 ways to split
+a group of N items into 2 groups, it is hard to compute the optimal split, so various heuristics
+are used. One approach is pick the cluster with the largest diameter, and split it in two using the
+K-means or K-medoids algorithm with K = 2. This is called the bisecting K-means algorithm
+(Steinbach et al. 2000). We can repeat this until we have any desired number of clusters. This
+can be used as an alternative to regular K-means, but it also induces a hierarchical clustering.
+
+Another method is to build a minimum spanning tree from the dissimilarity graph, and then
+(This
+
+to make new clusters by breaking the link corresponding to the largest dissimilarity.
+actually gives the same results as single link agglomerative clustering.)
+is as
+follows. We start with a single cluster containing all the data, G = {1, . . . , N}. We then
+measure the average dissimilarity of i ∈ G to all the other i(cid:2) ∈ G:
+
+Yet another method, called dissimilarity analysis (Macnaughton-Smith et al. 1964),
+
+(cid:4)
+
+i(cid:2)∈G
+
+dG
+i =
+
+1
+nG
+
+di,i(cid:2)
+
+(25.52)
+
+(25.53)
+
+(25.54)
+
+We remove the most dissimilar object and put it in its own cluster H:
+
+i∗
+
+= arg max
+i∈G
+
+i , G = G \ {i∗}, H = {i∗}
+dG
+
+We now continue to move objects from G to H until some stopping criterion is met. Speciﬁcally,
+to move that maximizes the average dissimilarity to each i(cid:2) ∈ G but minimizes
+we pick a point i∗
+(cid:4)
+the average dissimilarity to each i(cid:2) ∈ H:
+
+dH
+i =
+
+1
+nH
+
+i(cid:2)∈H
+
+di,i(cid:2) ,
+
+i∗
+
+i − dH
+dG
+
+i
+
+= arg max
+i∈G
+i − dH
+
+i
+
+We continue to do this until dG
+is negative. The ﬁnal result is that we have split G into
+two daughter clusters, G and H. We can then recursively call the algorithm on G and/or H, or
+on any other node in the tree. For example, we might choose to split the node G whose average
+dissimilarity is highest, or whose maximum dissimilarity (i.e., diameter) is highest. We continue
+the process until the average dissimilarity within each cluster is below some threshold, and/or
+all clusters are singletons.
+
+Divisive clustering is less popular than agglomerative clustering, but it has two advantages.
+First, it can be faster, since if we only split for a constant number of levels, it takes just O(N )
+time. Second, the splitting decisions are made in the context of seeing all the data, whereas
+bottom-up methods make myopic merge decisions.
+
+25.5. Hierarchical clustering
+
+899
+
+25.5.3
+
+Choosing the number of clusters
+
+It is difficult to choose the “right” number of clusters, since a hierarchical clustering algorithm
+will always create a hierarchy, even if the data is completely random. But, as with choosing K
+for K-means, there is the hope that there will be a visible “gap” in the lengths of the links in the
+dendrogram (represent the dissimilarity between merged groups) between natural clusters and
+unnatural clusters. Of course, on real data, this gap might be hard to detect. In Section 25.5.4,
+we will present a Bayesian approach to hierarchical clustering that nicely solves this problem.
+
+25.5.4
+
+Bayesian hierarchical clustering
+
+There are several ways to make probabilistic models which produce results similar to hierarchical
+clustering, e.g., (Williams 2000; Neal 2003b; Castro et al. 2004; Lau and Green 2006). Here we
+present one particular approach called Bayesian hierarchical clustering (Heller and Ghahra-
+mani 2005). Algorithmically it is very similar to standard bottom-up agglomerative clustering,
+and takes comparable time, whereas several of the other techniques referenced above are much
+slower. However, it uses Bayesian hypothesis tests to decide which clusters to merge (if any),
+rather than computing the similarity between groups of points in some ad-hoc way. These
+hypothesis tests are closely related to the calculations required to do inference in a Dirichlet
+process mixture model, as we will see. Furthermore, the input to the model is a data matrix,
+not a dissimilarity matrix.
+
+25.5.4.1
+
+The algorithm
+Let D = {x1, . . . , xN} represent all the data, and let Di be the set of datapoints at the leaves
+of the substree Ti. At each step, we compare two trees Ti and Tj to see if they should be
+merged into a new tree. Deﬁne Dij as their merged data, and let Mij = 1 if they should be
+merged, and Mij = 0 otherwise.
+
+The probability of a merge is given by
+p(Dij|Tij)
+
+rij (cid:2) p(Dij|Mij = 1)p(Mij = 1)
+
+(25.55)
+
+p(Dij|Tij) =p( Dij|Mij = 1)p(Mij = 1) + p(Dij|Mij = 0)p(Mij = 0)
+
+(25.56)
+Here p(Mij = 1) is the prior probability of a merge, which can be computed using a bottom-up
+algorithm described below. We now turn to the likelihood terms. If Mij = 1, the data in Dij is
+assumed to come from the same model, and hence
+
+(cid:12) ⎡
+⎣ (cid:20)
+
+⎤
+⎦ p(θ|λ)dθ
+
+p(Dij|Mij = 1) =
+
+p(xn|θ)
+
+(25.57)
+If Mij = 0, the data in Dij is assumed to have been generated by each tree independently, so
+(25.58)
+
+p(Dij|Mij = 0) = p(Di|Ti)p(Dj|Tj)
+
+xn∈Dij
+
+These two terms will have already been computed by the bottom-up process. Consequently
+we have all the quantities we need to decide which trees to merge. See Algorithm 9 for the
+pseudocode, assuming p(Mij) is uniform. When ﬁnished, we can cut the tree at points where
+rij < 0.5.
+
+900
+
+Chapter 25. Clustering
+
+Algorithm 25.3: Bayesian hierarchical clustering
+1 Initialize Di = {xi}, i = 1 :N ;
+2 Compute p(Di|Ti), i = 1 :N ;
+3 repeat
+4
+
+5
+
+6
+
+7
+
+for each pair of clusters i, j do
+Compute p(Dij|Tij)
+Find the pair Di and Dj with highest merge probability rij;
+Merge Dk := Di ∪ Dj;
+Delete Di, Dj ;
+
+8
+9 until all clusters merged;
+
+25.5.4.2
+
+The connection with Dirichlet process mixture models
+
+In this section, we will establish the connection between BHC and DPMMs. This will in turn
+give us an algorithm to compute the prior probabilities p(Mij = 1).
+Note that the marginal likelihood of a DPMM, summing over all 2N − 1 partitions, is given by
+p(Dk) =
+
+(cid:4)
+
+(25.59)
+
+p(v)p(Dv)
+(cid:26)mv
+
+l=1 Γ(nv
+l )
+
+v∈V
+αmv
+
+mv(cid:20)
+
+Γ(nk+α)
+
+Γ(α)
+
+p(Dv
+l )
+
+p(v) =
+
+p(Dv) =
+
+(25.60)
+
+(25.61)
+
+l=1
+
+l
+
+where V is the set of all possible partitions of Dk, p(v) is the probability of partition v, mv is
+is the number of points in cluster l of partition v, Dv
+the number of clusters in partition v, nv
+are the points in cluster l of partition v, and nk are the number of points in Dk.
+l
+One can show (Heller and Ghahramani 2005) that p(Dk|Tk) computed by the BHC algorithm
+is similar to p(Dk) given above, except for the fact that it only sums over partitions which are
+consistent with tree Tk. (The number of tree-consistent partitions is exponential in the number
+of data points for balanced binary trees, but this is obviously a subset of all possible partitions.)
+In this way, we can use the BHC algorithm to compute a lower bound on the marginal likelihood
+of the data from a DPMM. Furthermore, we can interpret the algorithm as greedily searching
+through the exponentially large space of tree-consistent partitions to ﬁnd the best ones of a
+given size at each step.
+We are now in a position to compute πk = p(Mk = 1), for each node k with children i and
+j. This is equal to the probability of cluster Dk coming from the DPMM, relative to all other
+partitions of Dk consistent with the current tree. This can be computed as follows:
+initialize
+di = α and πi = 1 for each leaf i; then as we build the tree, for each internal node k, compute
+dk = αΓ(nk) +d idj, and πk =
+
+, wherei and j are k’s left and right children.
+
+αΓ(nk)
+
+dk
+
+25.6. Clustering datapoints and features
+
+901
+
+Data Set
+Synthetic
+Newsgroups
+Spambase
+Digits
+Fglass
+
+Single Linkage
+0.599 ± 0.033
+0.275 ± 0.001
+0.598 ± 0.017
+0.224 ± 0.004
+0.478 ± 0.009
+
+Complete Linkage
+0.634 ± 0.024
+0.315 ± 0.008
+0.699 ± 0.017
+0.299 ± 0.006
+0.476 ± 0.009
+
+Average Linkage
+0.668 ± 0.040
+0.282 ± 0.002
+0.668 ± 0.019
+0.342 ± 0.005
+0.491 ± 0.009
+
+BHC
+0.828 ± 0.025
+0.465 ± 0.016
+0.728 ± 0.029
+0.393 ± 0.015
+0.467 ± 0.011
+
+Table 25.1
+Purity scores for various hierarchical clustering schemes applied to various data sets. The
+synthetic data has N = 200, D = 2, C = 4 and real features. Newsgroups is extracted from the 20
+newsgroups dataset (D = 500, N = 800, C = 4, binary features). Spambase has N = 100, C = 2, D =
+57 , binary features. Digits is the CEDAR Buffalo digits (N = 200, C = 10, D = 64, binarized features).
+Fglass is forensic glass dataset (N = 214, C = 6, D = 9, real features).
+Source: Table 1 of (Heller and
+Ghahramani 2005). Used with kind permission of Katherine Heller.
+
+25.5.4.3
+
+Learning the hyper-parameters
+
+The model has two free-parameters: α and λ, where λ are the hyper-parameters for the prior
+on the parameters θ. In (Heller and Ghahramani 2005), they show how one can back-propagate
+gradients of the form ∂p(Dk|Tk)
+through the tree, and thus perform an empirical Bayes estimate
+of the hyper-parameters.
+
+∂λ
+
+25.5.4.4
+
+Experimental results
+
+(Heller and Ghahramani 2005) compared BHC with traditional agglomerative clustering algo-
+rithms on various data sets in terms of purity scores. The results are shown in Table 25.1. We
+see that BHC did much better than the other methods on all datasets except the forensic glass
+one.
+
+Figure 25.16 visualizes the tree structure estimated by BHC and agglomerative hierarchical
+clustering (AHC) on the newsgroup data (using a beta-Bernoulli model). The BHC tree is clearly
+superior (look at the colors at the leaves, which represent class labels). Figure 25.17 is a zoom-in
+on the top few nodes of these two trees. BHC splits off clusters concerning sports from clusters
+concerning cars and space. AHC keeps sports and cars merged together. Although sports and
+cars both fall under the same “rec” newsgroup heading (as opposed to space, that comes under
+the “sci” newsgroup heading), the BHC clustering still seems more reasonable, and this is borne
+out by the quantitative purity scores.
+
+BHC has also been applied to gene expression data, with good results (Savage et al. 2009).
+
+25.6
+
+Clustering datapoints and features
+
+So far, we have been concentrating on clustering datapoints. But each datapoint is often
+described by multiple features, and we might be interested in clustering them as well. Below we
+describe some methods for doing this.
+
+902
+
+Chapter 25. Clustering
+
+4 Newsgroups Average Linkage Clustering
+
+4 Newsgroups Bayesian Hierarchical Clustering
+
+(a)
+
+(b)
+
+Figure 25.16 Hierarchical clustering applied to 800 documents from 4 newsgroups (red is rec.autos, blue
+is rec.sport.baseball, green is rec.sport.hockey, and magenta is sci.space). Top: average linkage hierarchical
+clustering. Bottom: Bayesian hierarchical clustering. Each of the leaves is labeled with a color, according
+to which newsgroup that document came from. We see that the Bayesian method results in a clustering
+that is more consistent with these labels (which were not used during model ﬁtting).
+Source: Figure 7 of
+(Heller and Ghahramani 2005). Used with kind permission of Katherine Heller.
+
+25.6. Clustering datapoints and features
+
+903
+
+All Data
+
+354
+
+Game
+Team 
+Play
+
+446
+
+Car
+Space 
+NASA
+
+205
+
+149
+
+284
+
+162
+
+Baseball
+  Pitch 
+    Hit
+
+NHL
+Hockey 
+Round
+
+Car
+Dealer 
+Drive
+
+Space
+NASA 
+Orbit
+
+(a)
+
+All Data
+
+1
+
+Quebec
+Jet 
+Boston
+
+799
+
+Car
+Baseball 
+Engine
+
+2
+
+797
+
+Pitcher
+Boston 
+Ball
+
+Car
+Player 
+Space
+
+796
+
+Team
+Game 
+Hockey
+
+1
+
+Vehicle
+Dealer 
+Driver
+
+(b)
+
+Figure 25.17 Zoom-in on the top nodes in the trees of Figure 25.16.
+(b) Average
+linkage. We show the 3 most probable words per cluster. The number of documents at each cluster is also
+given. Source: Figure 5 of (Heller and Ghahramani 2005). Used with kind permission of Katherine Heller.
+
+(a) Bayesian method.
+
+25.6.1
+
+Biclustering
+
+Clustering the rows and columns is known as biclustering or coclustering. This is widely used
+in bioinformatics, where the rows often represent genes and the columns represent conditions.
+It can also be used for collaborative ﬁltering, where the rows represent users and the columns
+represent movies.
+
+A variety of ad hoc methods for biclustering have been proposed; see (Madeira and Oliveira
+2004) for a review. Here we present a simple probabilistic generative model, based on (Kemp
+et al. 2006) (see also (Sheng et al. 2003) for a related approach). The idea is to associate each
+row and each column with a latent indicator, ri ∈ {1, . . . , K r}, cj ∈ {1, . . . , K c}. We then
+assume the data are iid across samples and across features within each block:
+
+(cid:20)
+
+(cid:20)
+
+p(x|r, c, θ) =
+
+p(xij|ri, cj, θ) = p(xij|θri,cj )
+
+(25.62)
+
+i
+
+j
+
+where θa,b are the parameters for row cluster a and column cluster b. Rather than using a ﬁnite
+number of clusters for the rows and columns, we can use a Dirchlet process, as in the inﬁnite
+relational model which we discuss in Section 27.6.1. We can ﬁt this model using e.g., (collapsed)
+Gibbs sampling.
+
+The behavior of this model is illustrated in Figure 25.18. The data has the form X(i, j) = 1
+iff animal i has feature j, where i = 1 : 50 and j = 1 : 85. The animals represent whales, bears,
+horses, etc. The features represent properties of the habitat (jungle, tree, coastal), or anatomical
+properties (has teeth, quadrapedal), or behavioral properties (swims, eats meat), etc. The model,
+using a Bernoulli likelihood, was ﬁt to the data. It discovered 12 animal clusters and 33 feature
+clusters. For example, it discovered a bicluster that represents the fact that mammals tend to
+have aquatic features.
+
+25.6.2 Multi-view clustering
+
+The problem with biclustering is that each object (row) can only belong to one cluster. Intuitively,
+an object can have multiple roles, and can be assigned to different clusters depending on which
+
+904
+
+Chapter 25. Clustering
+
+killer whale, blue whale, humpback, seal, walrus, dolphin
+antelope, horse, giraffe, zebra, deer
+
+O1
+O2
+O3 monkey, gorilla, chimp
+O4
+hippo, elephant, rhino
+O5
+grizzly bear, polar bear
+
+ﬂippers, strain teeth, swims, arctic, coastal, ocean, water
+hooves, long neck, horns
+hands, bipedal, jungle, tree
+bulbous body shape, slow, inactive
+
+F1
+F2
+F3
+F4
+F5 meat teeth, eats meat, hunter, ﬁerce
+F6
+
+walks, quadrapedal, ground
+
+F1 2
+
+43
+
+5
+
+6
+
+O1
+
+O2
+O3
+O4
+O5
+
+Figure 25.18 Illustration of biclustering . We show 5 of the 12 animal clusters, and 6 of the 33 feature
+clusters. The original data matrix is shown, partitioned according to the discovered clusters. From Figure
+3 of (Kemp et al. 2006). Used with kind permission of Charles Kemp.
+
+α
+
+γ
+
+β
+
+cj
+
+θjk
+
+k = 1 : ∞
+
+j = 1 : D
+
+riv
+
+v = 1 : ∞
+
+xij
+
+i = 1 : N
+
+(b)
+
+(a)
+
+Figure 25.19 (a) Illustration of multi-view clustering. Here we have 3 views (column partitions).
+In the
+ﬁrst view, we have 2 clusters (row partitions).
+In the third view,
+we have 2 clusters. The number of views and partitions are inferred from data. Rows within each colored
+block are assumed to generated iid; however, each column can have a different distributional form, which
+is useful for modeling discrete and continuous data. From Figure 1 of (Guan et al. 2010). Used with kind
+permission of Jennifer Dy. (b) Corresponding DGM.
+
+In the second view, we have 3 clusters.
+
+subset of features you use. For example, in the animal dataset, we may want to group the
+animals on the basis of anatomical features (e.g., mammals are warm blooded, reptiles are not),
+or on the basis of behavioral features (e.g., predators vs prey).
+
+We now present a model that can capture this phenomenon. This model was indepen-
+dently proposed in (Shafto et al. 2006; Mansinghka et al. 2011), who call it crosscat (for cross-
+categorization), and in (Guan et al. 2010; Cui et al. 2010), who call it (non-parametric) multi-clust.
+(See also (Rodriguez and Ghosh 2011) for a very similar model.) The idea is that we partition the
+columns (features) into V groups or views, so cj ∈ {1, . . . , V }, where j ∈ {1, . . . , D} indexes
+
+25.6. Clustering datapoints and features
+
+905
+
+features. We will use a Dirichlet process prior for p(c), which allows V to grow automatically.
+Then for each partition of the columns (i.e., each view), call it v, we partition the rows, again
+using a DP, as illustrated in Figure 25.19(a). Let riv ∈ {1, . . . , K(v)} be the cluster to which
+the i’th row belongs in view v. Finally, having partitioned the rows and columns, we generate
+the data: we assume all the rows and columns within a block are iid. We can deﬁne the model
+more precisely as follows:
+
+p(c, r,D) =p( c)p(r|c)p(D|r, c)
+
+p(c) =DP( c|α)
+p(r|c) =
+
+V (c)(cid:20)
+V (c)(cid:20)
+
+v=1
+
+p(D|r, c, θ) =
+
+DP(rv|β)
+⎡
+⎣K(rv)(cid:20)
+(cid:20)
+
+(cid:12) (cid:20)
+
+⎤
+⎦
+
+p(xij|θjk)p(θjk)dθjk
+
+v=1
+
+j:cj =v
+
+k=1
+
+i:riv=k
+
+(25.63)
+(25.64)
+
+(25.65)
+
+(25.66)
+
+(25.67)
+
+See Figure 25.19(b) for the DGM.2
+
+If the data is binary, and we use a Beta(γ, γ) prior for θjk, the likelihood reduces to
+
+V (c)(cid:20)
+
+(cid:20)
+
+K(rv)(cid:20)
+
+v=1
+
+j:cj =v
+
+k=1
+
+p(D|r, c, γ) =
+(cid:7)
+
+Beta(nj,k,v + γ, nj,k,v + γ)
+
+Beta(γ, γ)
+
+where nj,k,v =
+i:ri,v=k I(xij = 1) counts the number of features which are on in the j’th
+column for view v and for row cluster k. Similarly, nj,k,v counts how many features are off.
+The model is easily extended to other kinds of data, by replacing the beta-Bernoulli with, say,
+the Gaussian-Gamma-Gaussian model, as discussed in (Guan et al. 2010; Mansinghka et al. 2011).
+Approximate MAP estimation can be done using stochastic search (Shafto et al. 2006), and
+approximate inference can be done using variational Bayes (Guan et al. 2010) or Gibbs sampling
+(Mansinghka et al. 2011). The hyper-parameter γ for the likelihood can usually be set in a non-
+informative way, but results are more sensitive to the other two parameters, since α controls
+the number of column partitions, and β controls the number of row partitions. Hence a more
+robust technique is to infer the hyper-parameters using MH. This also speeds up convergence
+(Mansinghka et al. 2011).
+
+Figure 25.20 illustrates the model applied to some binary data containing 22 animals and 106
+features. The ﬁgures shows the (approximate) MAP partition. The ﬁrst partition of the columns
+contains taxonomic features, such as “has bones”, “is warm-blooded”, “lays eggs”, etc. This
+divides the animals into birds, reptiles/ amphibians, mammals, and invertebrates. The second
+partition of the columns contains features that are treated as noise, with no apparent structure
+(except for the single row labeled “frog”). The third partition of the columns contains ecological
+features like “dangerous”, “carnivorous”, “lives in water”, etc. This divides the animals into prey,
+land predators, sea predators and air predators. Thus each animal (row) can belong to a different
+
+2. The dependence between r and c is not shown, since it is not a dependence between the values of riv and cj, but
+between the cardinality of v and cj. In other words, the number of row partitions we need to specify (the number of
+views, indexed by v) depends on the number of column partitions (clusters) that we have.
+
+906
+
+A
+
+Leopard
+Sheep
+Seal
+Dolphin
+Monkey
+Bat
+Alligator
+Iguana
+Frog
+Python
+Finch
+Ostrich
+Seagull
+Owl
+Penguin
+Eagle
+Grasshopper
+Ant
+Bee
+Jellyfish
+Octopus
+Dragonfly
+
+B
+
+C
+
+Frog
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+Chapter 25. Clustering
+
+Leopard
+Alligator
+Python
+Seal
+Dolphin
+Frog
+Jellyfish
+Octopus
+Penguin
+Finch
+Seagull
+Owl
+Eagle
+Dragonfly
+Bat
+Grasshopper
+Ant
+Bee
+Sheep
+Monkey
+Iguana
+Ostrich
+
+d
+r
+a
+z
+i
+l
+ 
+
+d
+r
+o
+c
+ 
+l
+
+n
+e
+e
+r
+g
+ 
+s
+i
+
+a
+ 
+s
+i
+
+s
+k
+w
+a
+u
+q
+s
+
+ 
+
+k
+a
+e
+b
+a
+ 
+s
+a
+h
+
+e
+u
+g
+n
+o
+t
+ 
+a
+ 
+s
+a
+h
+
+s
+r
+e
+p
+p
+
+i
+l
+f
+ 
+s
+a
+h
+
+l
+i
+
+a
+t
+ 
+a
+ 
+s
+a
+h
+
+i
+
+s
+w
+a
+p
+ 
+s
+a
+h
+
+n
+a
+r
+b
+e
+g
+r
+a
+
+ 
+
+y
+r
+r
+u
+f
+ 
+s
+i
+
+n
+w
+o
+r
+b
+ 
+s
+i
+
+e
+c
+i
+m
+
+ 
+s
+t
+a
+e
+
+s
+t
+n
+e
+d
+o
+r
+ 
+s
+t
+a
+e
+
+t
+u
+o
+n
+s
+ 
+a
+ 
+s
+a
+h
+
+e
+a
+n
+n
+e
+t
+n
+a
+ 
+s
+a
+h
+
+i
+
+a
+n
+p
+s
+ 
+a
+ 
+s
+a
+h
+
+l
+ 
+
+a
+ 
+s
+a
+h
+
+s
+g
+g
+e
+ 
+s
+y
+a
+
+s
+e
+n
+o
+b
+ 
+s
+a
+h
+
+l
+
+l
+
+a
+m
+m
+a
+m
+a
+ 
+s
+i
+
+ 
+
+l
+
+d
+e
+d
+o
+o
+b
+−
+m
+r
+a
+w
+ 
+s
+i
+
+t
+e
+e
+f
+ 
+s
+a
+h
+
+h
+t
+e
+e
+t
+ 
+s
+a
+h
+
+t
+r
+a
+m
+
+s
+ 
+s
+i
+
+s
+p
+u
+o
+r
+g
+n
+
+ 
+
+i
+ 
+s
+l
+e
+v
+a
+r
+t
+
+s
+e
+s
+i
+o
+n
+d
+u
+o
+
+ 
+
+l
+ 
+s
+e
+k
+a
+m
+
+l
+l
+
+a
+t
+ 
+s
+i
+
+h
+s
+i
+f
+ 
+a
+ 
+s
+i
+
+y
+m
+
+i
+l
+s
+ 
+s
+i
+
+s
+r
+a
+o
+r
+
+s
+n
+i
+f
+ 
+s
+a
+h
+
+e
+n
+
+i
+l
+
+e
+f
+ 
+a
+ 
+s
+i
+
+s
+n
+r
+o
+h
+ 
+s
+a
+h
+
+s
+e
+v
+o
+o
+h
+ 
+s
+a
+h
+
+t
+n
+e
+d
+o
+r
+ 
+a
+ 
+s
+i
+
+s
+e
+k
+a
+
+l
+ 
+
+n
+
+i
+ 
+s
+e
+v
+
+i
+l
+
+i
+
+i
+
+n
+a
+b
+h
+p
+m
+a
+n
+a
+ 
+s
+i
+
+ 
+
+h
+t
+o
+o
+m
+
+s
+e
+e
+r
+t
+ 
+n
+
+e
+g
+r
+a
+
+l
+ 
+s
+i
+
+s
+t
+u
+n
+ 
+s
+t
+a
+e
+
+s
+ 
+s
+i
+
+i
+ 
+s
+e
+v
+
+i
+l
+
+t
+e
+e
+f
+ 
+d
+e
+b
+b
+e
+w
+ 
+s
+a
+h
+
+s
+e
+t
+a
+m
+
+ 
+
+l
+
+i
+l
+c
+d
+o
+c
+n
+
+ 
+
+i
+ 
+s
+e
+v
+
+i
+l
+
+i
+
+s
+u
+o
+i
+c
+o
+r
+e
+f
+ 
+s
+i
+
+s
+u
+o
+r
+e
+g
+n
+a
+d
+ 
+s
+i
+
+e
+r
+o
+v
+n
+r
+a
+c
+a
+ 
+s
+i
+
+r
+o
+t
+a
+d
+e
+r
+p
+a
+ 
+s
+i
+
+ 
+
+ 
+
+r
+e
+t
+a
+w
+n
+
+ 
+
+i
+ 
+s
+e
+v
+
+i
+l
+
+s
+e
+
+i
+l
+f
+
+g
+n
+o
+
+l
+ 
+s
+i
+
+s
+s
+a
+r
+g
+n
+
+h
+s
+i
+f
+ 
+s
+t
+a
+e
+
+ 
+
+s
+e
+t
+a
+m
+
+s
+e
+v
+a
+e
+
+l
+ 
+s
+t
+a
+e
+
+i
+
+s
+l
+a
+m
+n
+a
+ 
+s
+t
+a
+e
+
+i
+ 
+s
+e
+v
+
+i
+l
+
+i
+l
+c
+ 
+t
+o
+h
+n
+
+ 
+
+i
+ 
+s
+e
+v
+
+i
+l
+
+Figure 25.20 MAP estimate produced by the crosscat system when applied to a binary data matrix of
+animals (rows) by features (columns). See text for details.
+Source: Figure 7 of (Shafto et al. 2006) . Used
+with kind permission of Vikash Mansingkha.
+
+cluster depending on what set of features are considered. Uncertainty about the partitions can
+be handled by sampling.
+It is interesting to compare this model to a standard inﬁnite mixture model. While the
+standard model can represent any density on ﬁxed-sized vectors as N → ∞, it cannot cope
+with D → ∞, since it has no way to handle irrelevant, noisy or redundant features. By contrast,
+the crosscat/multi-clust system is robust to irrelevant features:
+it can just partition them off,
+and cluster the rows only using the relevant features. Note, however, that it does not need a
+separate “background” model, since everything is modelled using the same mechanism. This is
+useful, since one’s person’s noise is another person’s signal. (Indeed, this symmetry may explain
+why multi-clust outperformed the sparse mixture model approach of (Law et al. 2004) in the
+experiments reported in (Guan et al. 2010).)
+
+

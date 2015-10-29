@@ -18,7 +18,7 @@
 
 **1. EasilyReadLearn.py &nbsp; {PDF File} &nbsp; [Start Page Number-Stop Page Number]**
 
->功能：生成PDF文件中的单词释义频率供学习。
+>功能：生成PDF文件中的单词释义频率供学习。{}内是必填项, []内是选填项，默认提取PDF中所有页面。
 
 **2. Sync.py,直接双击或者命令行中直接敲入Sync...py回车即可** 
 
@@ -41,6 +41,5 @@
 
 ~~添加提取特定页等的支持~~
 
-添加分析HTLM，TXT的支持
 
 <hr>
