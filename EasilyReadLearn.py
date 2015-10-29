@@ -90,7 +90,7 @@ def generate_word_table(word_frequence,sheet_title):
 
 if __name__=="__main__":
     if len(sys.argv)<2:
-        print u"Usage: EasilyReadLearn.py [Your PDF File]"
+        print u"Usage: EasilyReadLearn.py {Your PDF File} [Start Page Number-Stop Page Number]"
         exit()
     file_prefix=sys.argv[1].split("\\")[-1][:-4]
     if len(file_prefix)>31:
@@ -100,7 +100,17 @@ if __name__=="__main__":
         print u"没有找到%s.pdf这个文件，请确定路径" % file_prefix
         exit()
     print u"开始处理..."
-    syscmd="pdf2txt -o %s.txt %s " % (sys.path[0]+"\\"+file_prefix,sys.argv[1])
+    syscmd=""
+    if len(sys.argv)==2:
+        syscmd="pdf2txt -o %s.txt %s " % (sys.path[0]+"\\"+file_prefix,sys.argv[1])
+    elif len(sys.argv)==3:
+        file_prefix+=sys.argv[2]
+        syscmd="pdf2txt -o %s.txt -p " % file_prefix
+        page_range=sys.argv[2].split("-")
+        for i in range(int(page_range[0]),int(page_range[1])):
+            syscmd+=str(i)+","
+        syscmd=syscmd[:-1]+" "
+        syscmd+=sys.argv[1]
     os.system(syscmd)
     word_frequence=generate_word_frequence(file_prefix+".txt")
     generate_word_table(word_frequence,file_prefix)

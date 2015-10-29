@@ -16,7 +16,7 @@
 
 使用时：
 
-**1. EasilyReadLearn.py &nbsp; [Your English Book PDF File]**
+**1. EasilyReadLearn.py &nbsp; {PDF File} &nbsp; [Start Page Number-Stop Page Number]**
 
 >功能：生成PDF文件中的单词释义频率供学习。
 
@@ -37,9 +37,9 @@
 
 ~~整合各个部分，完成Version 1.0；~~
 
-Sync Tolearn中Sheet单词学完后删除;
+~~Sync Tolearn中Sheet单词学完后删除;~~
 
-添加提取特定页等的支持
+~~添加提取特定页等的支持~~
 
 添加分析HTLM，TXT的支持
 

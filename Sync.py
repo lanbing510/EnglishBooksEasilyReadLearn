@@ -25,6 +25,7 @@ for row in ws_mastered.rows:
     if row_count>1:
         dict_mastered.update({row[0].value:row_count})
 
+# tolearn.xslx -> mastered.xslx
 for sheet in wb_tolearn.get_sheet_names():
     ws_tolearn=wb_tolearn[sheet]
     row_count=0
@@ -43,6 +44,7 @@ for sheet in wb_tolearn.get_sheet_names():
             else:
                 pass
 
+# mastered.xslx -> tolearn.xslx
 for sheet in wb_mastered.get_sheet_names():
     ws_mastered=wb_mastered[sheet]
     row_count=0
@@ -76,6 +78,8 @@ def polish_sheets(wb):
                 ws_filtered.cell(row=row_count,column=4).set_explicit_value(value=row[3].value,data_type="s")
         wb.remove_sheet(wb[sheet])
         wb[sheet+"_temp"].title=sheet
+        if row_count==1: # remove the empty sheet
+            wb.remove_sheet(wb[sheet])
 
 polish_sheets(wb_tolearn)
 polish_sheets(wb_mastered)
