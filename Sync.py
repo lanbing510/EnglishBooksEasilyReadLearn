@@ -66,6 +66,7 @@ for sheet in wb_mastered.get_sheet_names():
             else:
                 pass
 
+# remove the none areas to polish the sheets
 def polish_sheets(wb):
     for sheet in wb.get_sheet_names():
         ws=wb[sheet]
