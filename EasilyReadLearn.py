@@ -26,7 +26,7 @@ def generate_word_frequence(filename):
         strstream+=line
     strstream=re.sub(r"\xef\xac\x81","fi",strstream) # fi 
     strstream=re.sub(r"\xef\xac\x82","fl",strstream) # fl
-    strstream=re.sub(r"(-\n|\:)","",strstream)
+    strstream=re.sub(r"(-\n{1,}|\:)","",strstream)
     strstream=re.sub(r"(\n{1,}|,|\.|\(|\)|\[|\]|\{|\}|\')"," ",strstream)
     word_list=re.findall(r"[A-Za-z]{2,}",strstream)    
     word_frequence={}
@@ -52,6 +52,8 @@ def lookup_dictionary(word):
         possible_words.append(word[0:-2])
         possible_words.append(word[0:-1])
     elif word_length>2 and word[-3:]=="ing":
+        if len(word)>=5 and word[-4]==word[-5]:
+            possible_words.append(word[0:-4])
         possible_words.append(word[0:-3])
         possible_words.append(word[0:-3]+"e")
     else:
@@ -79,6 +81,8 @@ def generate_word_table(word_frequence,sheet_title):
     ws.append([u"单词",u"生疏度",u"频率",u"解释"])
     row_count=1;
     for wd in word_frequence:
+        if len(wd)<=3:
+            continue
         (word,explain)=lookup_dictionary(wd)
         if explain:
             row_count+=1
