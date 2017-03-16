@@ -31,10 +31,11 @@ def generate_word_frequence(filename):
     word_list=re.findall(r"[A-Za-z]{2,}",strstream)    
     word_frequence={}
     for w in word_list:
+        w=w.strip().lower();
         if word_frequence.has_key(w):
             word_frequence[w]+=1;
         else:
-            word_frequence.update({w.lower():1})
+            word_frequence.update({w:1})
     return word_frequence
 
 def lookup_sql(word):
@@ -77,18 +78,26 @@ def generate_word_table(word_frequence,sheet_title):
     if not os.path.isfile(excel_output_filename):
         wb.save(excel_output_filename)
     wb=openpyxl.load_workbook(filename=excel_output_filename)
+    if sheet_title in wb.get_sheet_names():
+        wb.remove_sheet(wb[sheet_title])
     ws=wb.create_sheet(title=sheet_title)
     ws.append([u"单词",u"生疏度",u"频率",u"解释"])
     row_count=1;
+    word_dictionary={}
     for wd in word_frequence:
         if len(wd)<=3:
             continue
         (word,explain)=lookup_dictionary(wd)
         if explain:
-            row_count+=1
-            ws.append([word,1,word_frequence.get(wd)])
-            ws.cell(row=row_count,column=4).set_explicit_value(value=explain,data_type="s")
-            #ws.append([word,1,word_frequence.get(wd),explain])
+            if word_dictionary.has_key(word):
+                word_dictionary[word][0]=word_dictionary[word][0]+word_frequence.get(wd)
+            else:
+                word_dictionary.update({word:[word_frequence.get(wd),explain]})
+    for wd in word_dictionary.keys():
+        row_count+=1
+        ws.append([wd,1,word_dictionary[wd][0]])
+        ws.cell(row=row_count,column=4).set_explicit_value(value=word_dictionary[wd][1],data_type="s")
+        #ws.append([word,1,word_frequence.get(wd),explain])
     if "Sheet1" in wb.get_sheet_names():
         wb.remove_sheet(wb["Sheet1"])
     wb.save(excel_output_filename)
