@@ -86,8 +86,8 @@ def polish_sheets(wb):
             wb.remove_sheet(wb[sheet])
 
 
-#polish_sheets(wb_tolearn)
-#polish_sheets(wb_mastered)
+polish_sheets(wb_tolearn)
+polish_sheets(wb_mastered)
 
 wb_tolearn.save("tolearn.xlsm")
 wb_mastered.save("mastered.xlsm")
