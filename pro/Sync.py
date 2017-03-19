@@ -24,6 +24,7 @@ for row in ws_mastered.rows:
     if row_count>1:
         dict_mastered.update({row[0].value:row_count})
 
+
 # tolearn.xslx -> mastered.xslx
 for sheet in wb_tolearn.get_sheet_names():
     ws_tolearn=wb_tolearn[sheet]
@@ -33,12 +34,12 @@ for sheet in wb_tolearn.get_sheet_names():
         if row_count>1:
             if row[0].value in dict_mastered:
                 ws_mastered.cell(row=dict_mastered[row[0].value],column=3).value+=row[2].value
-                for i in range(8):
+                for i in range(9):
                     ws_tolearn.cell(row=row_count,column=i+1).value=None
             elif row[1].value==0:
-                ws_mastered.append([row[0].value,0,row[2].value,row[3].value,row[4].value,row[5].value,row[6].value,row[7].value])
+                ws_mastered.append([row[0].value,0,row[2].value,row[3].value,row[4].value,row[5].value,row[6].value,row[7].value,row[8].value])
                 dict_mastered.update({row[0].value:ws_mastered.get_highest_row()})
-                for i in range(8):
+                for i in range(9):
                     ws_tolearn.cell(row=row_count,column=i+1).value=None
             else:
                 pass
@@ -58,13 +59,14 @@ for sheet in wb_mastered.get_sheet_names():
                 row_index=wb_tolearn["from_mastered"].get_highest_row()   
                 for i in range(6):
                     wb_tolearn["from_mastered"].cell(row=row_index,column=4+i).set_explicit_value(value=row[3+i].value,data_type="s")
-                for i in range(8):
+                for i in range(9):
                     ws_mastered.cell(row=row_count,column=i+1).value=None
             elif row[1].value==-1:
-                for i in range(8):
+                for i in range(9):
                     ws_mastered.cell(row=row_count,column=i+1).value=None
             else:
                 pass
+
 
 # remove the none areas to polish the sheets
 def polish_sheets(wb):
@@ -83,8 +85,9 @@ def polish_sheets(wb):
         if row_count==1: # remove the empty sheet
             wb.remove_sheet(wb[sheet])
 
-polish_sheets(wb_tolearn)
-polish_sheets(wb_mastered)
+
+#polish_sheets(wb_tolearn)
+#polish_sheets(wb_mastered)
 
 wb_tolearn.save("tolearn.xlsm")
 wb_mastered.save("mastered.xlsm")
